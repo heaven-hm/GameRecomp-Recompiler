@@ -601,7 +601,13 @@ mod tests {
             // another test/thread still holds it open; rename publishes a new
             // inode and avoids that flake.
             let final_path = root.join("game-recomp-cli");
-            let staging = root.join(format!("game-recomp-cli.tmp-{}", std::process::id()));
+            // Unique per call: tests run in parallel within one process, so a
+            // PID-only staging name can collide and leave ETXTBSY on Linux.
+            static CLI_SEQ: std::sync::atomic::AtomicUsize =
+                std::sync::atomic::AtomicUsize::new(0);
+            let seq = CLI_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let staging = root.join(format!(
+                "game-recomp-cli.tmp-{}-{seq}", std::process::id()));
             std::fs::write(&staging, format!("#!/bin/sh\n{body}\n")).expect("write cli");
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))
