@@ -179,15 +179,21 @@ jobs:
         if: steps.cli.outputs.available == 'true'
         env:
           PYTHONPATH: python
+          # Keep the harness's own evidence (version.txt, inspect.json,
+          # results.json, hashes) in a predictable place for upload below.
+          GR_CLI_INTEGRATION_OUT: ${{ runner.temp }}/gr-cli-out
         run: |
           set -o pipefail
+          mkdir -p "$GR_CLI_INTEGRATION_OUT"
           sh tests/real_cli_integration.sh 2>&1 | tee "$RUNNER_TEMP/sdk-logs/real-cli.log"
 
-      - name: Upload real CLI log
+      - name: Upload real CLI logs and evidence
         if: always() && steps.cli.outputs.available == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sdk-log-real-cli
-          path: ${{ runner.temp }}/sdk-logs
+          path: |
+            ${{ runner.temp }}/sdk-logs
+            ${{ runner.temp }}/gr-cli-out
           if-no-files-found: warn
           retention-days: 14

@@ -104,7 +104,9 @@ upload steps are gated on that output. The secret's value is never echoed.
 Behaviour:
 
 - **CLI configured:** the script runs with `PYTHONPATH=python` and
-  `GAMERECOMP_CLI` set; stdout/stderr are captured to `sdk-log-real-cli`.
+  `GAMERECOMP_CLI` set. Its stdout/stderr and its own evidence files
+  (`GR_CLI_INTEGRATION_OUT`, including `results.json` and captured JSON) are
+  uploaded together as `sdk-log-real-cli`.
 - **CLI not configured:** the job reports an explicit `::notice` and runs a
   green "Skip real CLI integration" step. The integration script is not
   called, and no artifact is uploaded. Fork PRs, which cannot read secrets,
