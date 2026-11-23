@@ -3,6 +3,12 @@
 All examples call the same CLI contract. The tests use a fake CLI that writes
 a `report.json`, so they prove SDK plumbing without a long recompile.
 
+Pass the CLI location via `GAMERECOMP_CLI` or an argument — never hard-code a
+path or credential — and sanitize captured error text before sharing it; see
+[SECURITY.md](SECURITY.md). The full Ubuntu/macOS check matrix is in the
+[README](../README.md#verification) and in
+[CONTRIBUTING.md](CONTRIBUTING.md#test-matrix).
+
 ## Python
 
 ```sh

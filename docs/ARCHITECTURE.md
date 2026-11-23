@@ -29,7 +29,9 @@ four languages with one consistent contract.
 
 The recompiler itself lives in GameReComp and must remain the single
 implementation. Keeping client bindings here avoids duplicating runtime code
-in that repository and gives each language a clean package layout.
+in that repository and gives each language a clean package layout. This is a
+hard rule for contributors — see the "no second recompiler" section in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Provenance
 
@@ -37,6 +39,21 @@ in that repository and gives each language a clean package layout.
 - SDK code here is original; no rev.ng or Wine source was copied.
 - The GUI screenshot in `docs/screenshots/` was captured from the verified
   GameReComp GUI with CuaDriver (Accessibility + Screen Recording enabled).
+
+## Security boundary
+
+The CLI path is the only configuration the SDK consumes (via `GAMERECOMP_CLI`
+in Python, or as an explicit argument in C/C++/Rust). Captured CLI output on
+failure is untrusted text and must be sanitized before it is logged or shared;
+see [SECURITY.md](SECURITY.md) for the environment-only and error-sanitization
+policy.
+
+## Verification
+
+The same four binding checks run on Ubuntu and macOS in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml); the matrix and the
+commands are summarized in the [README](../README.md#verification) and in
+[CONTRIBUTING.md](CONTRIBUTING.md#test-matrix).
 
 ## Not claimed
 
