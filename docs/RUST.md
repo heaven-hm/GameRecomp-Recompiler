@@ -7,6 +7,8 @@
 - Tests: `rust/src/lib.rs` (`#[cfg(test)]` module)
 
 No external crates are required; the client uses `std::process::Command`.
+Unit tests create their own temporary directories and report files with
+`std`, and a fake CLI script (on Unix) exercises the full `recompile` path.
 
 ## API reference
 
@@ -26,14 +28,29 @@ impl Client {
     pub fn recompile(&self, pe: impl AsRef<Path>,
                      project: impl AsRef<Path>) -> Result<Report, Error>;
 }
+
+impl Report {
+    /// Raw, unmodified text of report.json (empty if the file is unreadable).
+    pub fn report_json(&self) -> String;
+}
+
+/// Extract the integer `score` field, or None if absent/not an integer.
+pub fn parse_score(json: &str) -> Option<i64>;
 ```
 
 `Error` implements `Display` and `std::error::Error`, so it composes with
 `anyhow`, `?`, and error reporters.
 
 `recompile` succeeds only when the CLI exits successfully and
-`<project>/reports/report.json` exists. `score` is parsed defensively from the
-report text; `None` means "not parsed", not "zero".
+`<project>/reports/report.json` exists. `score` is extracted by `parse_score`:
+whitespace around the key, colon and value is tolerated (pretty-printed
+reports work), negative values are supported, similarly named keys such as
+`score_notes` are ignored, and floats/overflow/missing fields yield `None`.
+`None` means "not parsed", not "zero".
+
+The `Report` struct is unchanged: its two public fields (`path`, `score`) and
+direct struct-literal construction remain source-compatible. `report_json()`
+re-reads `path` on demand, so no new field was added to the struct.
 
 ## Full example
 
@@ -51,8 +68,11 @@ fn main() {
         Err(e) => { eprintln!("init: {e}"); std::process::exit(1); }
     };
     match client.recompile(&args[1], &args[2]) {
-        Ok(report) => println!("report={} score={:?}",
-                               report.path.display(), report.score),
+        Ok(report) => {
+            println!("report={} score={:?}",
+                     report.path.display(), report.score);
+            println!("json={}", report.report_json().trim());
+        }
         Err(e) => { eprintln!("recompile: {e}"); std::process::exit(1); }
     }
 }
