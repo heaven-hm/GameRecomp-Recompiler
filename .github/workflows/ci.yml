@@ -1,47 +1,202 @@
 name: SDK verification
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # Lets maintainers re-run the secret-gated real-CLI job on demand.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: sdk-verification-${{ github.ref }}
+  group: sdk-verification-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# Single source of truth for pinned tool versions. Bump deliberately and in a
+# separate commit so a CI-tool change is never mixed with a code change.
+env:
+  # 3.12.9 is unavailable on current ubuntu-latest images; use the maintained
+  # 3.12 line so setup-python selects an available patch release per runner.
+  PYTHON_VERSION: '3.12'
+  PYTEST_VERSION: '8.3.4'
+  RUST_VERSION: '1.83.0'
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   verify:
     name: ${{ matrix.check }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         check: [python, rust, c, cpp]
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        if: matrix.check == 'python'
-        uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          python-version: '3.12'
+          persist-credentials: false
+
+      # --- Python -----------------------------------------------------------
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: matrix.check == 'python'
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # PIP_CACHE_DIR is set explicitly because pip's default cache location
+      # differs between Linux (~/.cache/pip) and macOS (~/Library/Caches/pip).
+      # Using the runner temp dir keeps both caches on an identical path.
+      - name: Cache pip downloads
+        if: matrix.check == 'python'
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ${{ runner.temp }}/pip-cache
+          # No restore-keys: a cache from another Python/pytest version must
+          # never be reused. Cross-OS archives are disabled for the same reason.
+          key: ${{ runner.os }}-pip-py${{ env.PYTHON_VERSION }}-pytest${{ env.PYTEST_VERSION }}
+          enableCrossOsArchive: false
+
+      - name: Install Python test tools
+        if: matrix.check == 'python'
+        env:
+          PIP_CACHE_DIR: ${{ runner.temp }}/pip-cache
+        run: |
+          set -euo pipefail
+          mkdir -p "$PIP_CACHE_DIR"
+          python3 -m pip install --disable-pip-version-check "pytest==${{ env.PYTEST_VERSION }}"
+          python3 -m pytest --version
 
       - name: Python SDK
         if: matrix.check == 'python'
         env:
           PYTHONPATH: python
-        run: python3 -m pytest python/tests -q
+        run: |
+          set -o pipefail
+          log_dir="$RUNNER_TEMP/sdk-logs"
+          mkdir -p "$log_dir"
+          python3 -m pytest python/tests -q 2>&1 | tee "$log_dir/python.log"
+
+      # --- Rust -------------------------------------------------------------
+      - name: Install pinned Rust toolchain
+        if: matrix.check == 'rust'
+        run: |
+          set -euo pipefail
+          rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update
+          rustup default "${RUST_VERSION}"
+          rustc --version
+          cargo --version
+
+      - name: Cache Cargo registry and build directory
+        if: matrix.check == 'rust'
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target
+          # Scoped by runner, toolchain and dependency graph. Deliberately no
+          # loose restore-keys, so a stale toolchain cache cannot be restored.
+          key: ${{ runner.os }}-cargo-rust${{ env.RUST_VERSION }}-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          enableCrossOsArchive: false
 
       - name: Rust SDK
         if: matrix.check == 'rust'
         working-directory: rust
-        run: cargo test
+        run: |
+          set -o pipefail
+          log_dir="$RUNNER_TEMP/sdk-logs"
+          mkdir -p "$log_dir"
+          cargo test 2>&1 | tee "$log_dir/rust.log"
 
+      # --- C / C++ ----------------------------------------------------------
       - name: C SDK
         if: matrix.check == 'c'
-        run: sh tests/test_c_sdk.sh
+        run: |
+          set -o pipefail
+          log_dir="$RUNNER_TEMP/sdk-logs"
+          mkdir -p "$log_dir"
+          sh tests/test_c_sdk.sh 2>&1 | tee "$log_dir/c.log"
 
       - name: C++ SDK
         if: matrix.check == 'cpp'
-        run: sh tests/test_cpp_sdk.sh
+        run: |
+          set -o pipefail
+          log_dir="$RUNNER_TEMP/sdk-logs"
+          mkdir -p "$log_dir"
+          sh tests/test_cpp_sdk.sh 2>&1 | tee "$log_dir/cpp.log"
+          sh tests/test_cmake_install.sh 2>&1 | tee "$log_dir/cmake-package.log"
+
+      # Always upload, including on failure, so a red matrix cell is debuggable.
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdk-log-${{ matrix.check }}-${{ matrix.os }}
+          path: ${{ runner.temp }}/sdk-logs
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Secret-gated end-to-end check. GitHub Actions does not allow the `secrets`
+  # context in a job-level `if`, so presence is detected in a step and the
+  # later steps are gated on that step's output. With no CLI configured the job
+  # still runs, reports an explicit skip, and never touches the integration
+  # script.
+  real-cli:
+    name: Real CLI integration
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GAMERECOMP_CLI: ${{ secrets.GAMERECOMP_CLI || vars.GAMERECOMP_CLI }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Detect CLI configuration
+        id: cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk-logs"
+          if [[ -z "${GAMERECOMP_CLI:-}" ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Real CLI integration skipped::No GAMERECOMP_CLI secret or repository variable is configured. Skipping tests/real_cli_integration.sh."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "GAMERECOMP_CLI is configured; running the real-CLI integration script."
+          fi
+
+      - name: Skip real CLI integration
+        if: steps.cli.outputs.available == 'false'
+        run: |
+          echo "Explicit skip: GAMERECOMP_CLI is not configured (no secret or repository variable)."
+
+      - name: Run real CLI integration
+        if: steps.cli.outputs.available == 'true'
+        env:
+          PYTHONPATH: python
+          # Keep the harness's own evidence (version.txt, inspect.json,
+          # results.json, hashes) in a predictable place for upload below.
+          GR_CLI_INTEGRATION_OUT: ${{ runner.temp }}/gr-cli-out
+        run: |
+          set -o pipefail
+          mkdir -p "$GR_CLI_INTEGRATION_OUT"
+          sh tests/real_cli_integration.sh 2>&1 | tee "$RUNNER_TEMP/sdk-logs/real-cli.log"
+
+      - name: Upload real CLI logs and evidence
+        if: always() && steps.cli.outputs.available == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdk-log-real-cli
+          path: |
+            ${{ runner.temp }}/sdk-logs
+            ${{ runner.temp }}/gr-cli-out
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=77", "wheel>=0.40"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gamerecomp-sdk"
+version = "0.1.0"
+description = "Python client SDK for the GameReComp PE32 x86 static recompilation pipeline"
+readme = "python/README.md"
+requires-python = ">=3.10"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "GameReComp contributors" }]
+keywords = ["gamerecomp", "recompiler", "pe32", "x86", "sdk", "client"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+# The SDK wraps the CLI through the standard library only; no runtime deps.
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7",
+  "tomli>=2; python_version < '3.11'",
+]
+build = [
+  "build>=1.2",
+  "setuptools>=77",
+  "wheel>=0.40",
+]
+dev = [
+  "pytest>=7",
+  "build>=1.2",
+  "twine>=4",
+  "tomli>=2; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/haseeb-mir/GameRecomp-Recompiler"
+Documentation = "https://github.com/haseeb-mir/GameRecomp-Recompiler/blob/main/docs/PYTHON.md"
+Source = "https://github.com/haseeb-mir/GameRecomp-Recompiler"
+Issues = "https://github.com/haseeb-mir/GameRecomp-Recompiler/issues"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["gamerecomp_sdk*"]
+
+# PEP 561 marker. The marker file itself is owned by the SDK-code change;
+# declaring it here makes the built wheel typed as soon as that file lands.
+[tool.setuptools.package-data]
+gamerecomp_sdk = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+addopts = "-q"

@@ -2,8 +2,20 @@
 name = "gamerecomp-sdk"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.70"
 license = "AGPL-3.0-only"
 description = "Rust client SDK for the GameReComp PE32 x86 recompilation pipeline"
+repository = "https://github.com/heaven-hm/GameRecomp-Recompiler"
+homepage = "https://github.com/heaven-hm/GameRecomp-Recompiler"
+documentation = "https://docs.rs/gamerecomp-sdk"
+keywords = ["recompiler", "pe32", "x86", "sdk", "gamerecomp"]
+categories = ["development-tools", "api-bindings"]
+include = [
+    "Cargo.toml",
+    "src/**/*.rs",
+    "examples/*.rs",
+    "tests/*.rs",
+]
 
 [lib]
 name = "gamerecomp_sdk"

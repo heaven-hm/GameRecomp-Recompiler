@@ -1,5 +1,6 @@
 # Build and test artifacts
 rust/target/
+target/
 __pycache__/
 *.pyc
 .pytest_cache/
