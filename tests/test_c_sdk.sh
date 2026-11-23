@@ -50,12 +50,12 @@ exit 7
 EOF
 chmod +x "$TMP/signal_cli"
 cat > "$TMP/eintr.c" <<'EOF'
+/* POSIX feature test macros must precede ANY header on glibc. */
+#define _POSIX_C_SOURCE 200809L
 #include "gamerecomp_sdk.h"
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
-/* POSIX feature test macros must precede any header on glibc. */
-#define _POSIX_C_SOURCE 200809L
 static void on_alrm(int sig) { (void)sig; }
 int main(int argc, char **argv) {
     struct sigaction sa;
