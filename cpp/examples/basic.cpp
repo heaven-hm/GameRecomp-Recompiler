@@ -8,6 +8,7 @@ int main(int argc, char **argv) {
         gamerecomp::Client client(argv[1]);
         auto report = client.recompile(argv[2], argv[3]);
         std::cout << "report=" << report.path << "\n";
+        std::cout << "score=" << report.score() << "\n";
     } catch (const std::exception &e) {
         std::cerr << e.what() << "\n";
         return 1;
