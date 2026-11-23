@@ -277,12 +277,18 @@ mod tests {
         use super::*;
 
         fn fake_cli(root: &Path, body: &str) -> PathBuf {
-            let cli = root.join("game-recomp-cli");
-            std::fs::write(&cli, format!("#!/bin/sh\n{body}\n")).expect("write cli");
+            // Write via a unique temp name then rename. On Linux, executing a
+            // script whose inode was just written can fail with ETXTBSY when
+            // another test/thread still holds it open; rename publishes a new
+            // inode and avoids that flake.
+            let final_path = root.join("game-recomp-cli");
+            let staging = root.join(format!("game-recomp-cli.tmp-{}", std::process::id()));
+            std::fs::write(&staging, format!("#!/bin/sh\n{body}\n")).expect("write cli");
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755))
+            std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))
                 .expect("chmod cli");
-            cli
+            std::fs::rename(&staging, &final_path).expect("publish cli");
+            final_path
         }
 
         fn pe(root: &Path) -> PathBuf {
