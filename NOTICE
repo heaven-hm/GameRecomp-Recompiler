@@ -1,0 +1,29 @@
+GameRecomp-Recompiler SDK — NOTICE
+==================================
+
+SPDX-License-Identifier: AGPL-3.0-only
+
+This project is licensed under the GNU Affero General Public License v3.0 only
+(see LICENSE). It is a thin client SDK that locates and invokes the GameReComp
+CLI (`game-recomp-cli run`) and reads its JSON report; it does not contain a
+second recompiler, loader or lifter.
+
+No third-party recompiler, loader or lifter source is copied into this
+repository. All four bindings (C, C++, Rust, Python) use only their language
+and platform standard libraries; the Rust crate has no external dependencies.
+
+Upstream attribution
+--------------------
+
+The projects below are credited for the relationship documented here. Their
+licences govern those upstream projects (and the CLI binary this SDK invokes),
+not any code vendored in this repository. This SDK copies no source from them.
+
+| Component | Upstream | Licence | Relation to this SDK |
+|---|---|---|---|
+| GameReComp | https://github.com/heaven-hm/GameReComp | AGPL-3.0-only (`Cargo.toml` and full text in its `LICENSE`) | The real PE32/x86 recompiler and CLI this SDK wraps. It is not bundled here; set `GAMERECOMP_CLI` to its `game-recomp-cli` binary. Its own third-party notices live in that repository's `NOTICE` and `LICENSES/`. |
+| PCRecomp | https://github.com/sp00nznet/pcrecomp — Ned Heller (@sp00nznet) and contributors | MIT, Copyright (c) 2026 sp00nz (`LICENSE`) | Upstream toolbox on which GameReComp's `tools/` and `runtime/` trees are based, used and extended there. No PCRecomp source is copied into this SDK. |
+| rev.ng / Capstone / igi-recomp | Credited by GameReComp (see its README, `NOTICE` and `LICENSES/`) | Per upstream (e.g. igi-recomp shim: MIT) | Reusable recovery/lifter and runtime-shim components used by GameReComp, not by this SDK directly. |
+
+See `docs/LICENSE_INVENTORY.md` for the full inventory, the licence-consistency
+checks and the artifact-verification results.
