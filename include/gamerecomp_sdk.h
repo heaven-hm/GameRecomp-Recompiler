@@ -16,9 +16,10 @@ typedef struct gr_client {
 /* Validate and retain the CLI path. Returns 0 on success, -1 on error. */
 int gr_client_init(gr_client *c, const char *cli_path);
 
-/* Recompile a PE32 x86 file into project_dir.
- * Returns 0 on success and copies the report path into report_path when it
- * exists; returns -1 on any failure with the reason in gr_last_error(). */
+/* Recompile a PE32 x86 file into project_dir, which must already exist and be
+ * a directory. Returns 0 on success and copies the report path into
+ * report_path when it exists; returns -1 on any failure with the reason in
+ * gr_last_error(). The public API and struct layout are unchanged. */
 int gr_recompile(gr_client *c, const char *pe_path, const char *project_dir,
                  char *report_path, size_t report_path_size);
 
