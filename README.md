@@ -60,9 +60,12 @@ c++ -std=c++17 -Wall -Wextra -Iinclude -Icpp/include \
 The C/C++ bindings use POSIX process APIs (`fork`/`execvp`/`pipe`/`waitpid`)
 and are intended for Linux and macOS, not Windows. The Rust and Python
 bindings use portable standard-library process APIs. Configuration is
-environment-driven where idiomatic: Python reads `GAMERECOMP_CLI`, then falls
-back to `game-recomp-cli` on `PATH`; the other bindings take the CLI path as an
-argument. Never hard-code a user path or credential.
+environment-driven where idiomatic: Python takes an explicit `--cli` argument,
+then reads `GAMERECOMP_CLI`, then uses the bare name `game-recomp-cli`; the
+other bindings take the CLI path as an argument. Because `Client` validates the
+path with `Path(...).is_file()` before spawning, pass an absolute path (a bare
+name is only accepted if it exists in the current directory). Never hard-code a
+user path or credential.
 
 Version status: the Rust crate declares `0.1.0`; there is no C header version
 macro, no Python `__version__`, and no published release process. See

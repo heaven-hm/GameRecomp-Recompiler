@@ -22,8 +22,10 @@ implemented is entirely the responsibility of the upstream CLI.
 
 - `new`/`init` validates the CLI path before doing anything else; a missing CLI
   is an error, never a fallback. C/C++ check that the path exists, Rust/Python
-  require a regular file. Python additionally reads `$GAMERECOMP_CLI` (then
-  falls back to the name `game-recomp-cli` on `PATH`).
+  require a regular file. Python takes an explicit argument, then reads
+  `$GAMERECOMP_CLI`, then uses the bare name `game-recomp-cli`; because it
+  validates with `Path(...).is_file()`, that bare name is only accepted if it
+  exists in the current directory rather than being searched on `PATH`.
 - `recompile(pe, project)` (C: `gr_recompile`) starts the CLI with an argument
   vector — no shell interpolation — and requires a zero exit status.
 - The SDK then requires `<project>/reports/report.json` to exist and returns
@@ -56,9 +58,10 @@ All four bindings build the same argument vector:
 
 Python's optional `inspect()` instead calls `<cli> inspect <pe> --json` and
 does not need a project directory. The SDK does not hard-code a CLI build path:
-C/C++/Rust take it as an argument and Python takes an argument, an environment
-variable, or `PATH`. An upstream build such as `gui/build/game-recomp-cli` is
-just one possible value.
+C/C++/Rust take it as an argument and Python takes an argument or an environment
+variable (its nominal bare-name default is subject to the `is_file()` check
+noted above). An upstream build such as `gui/build/game-recomp-cli` is just one
+possible value.
 
 ## Provenance
 
@@ -86,8 +89,8 @@ CI runs on `ubuntu-latest` and `macos-latest` only. See
 ## Security boundary
 
 The CLI path is the only configuration this SDK consumes (an argument in
-C/C++/Rust; argument, `GAMERECOMP_CLI` or `PATH` in Python). There is no config
-file and no credential store. Captured CLI output on failure is untrusted text:
+C/C++/Rust; an argument or `GAMERECOMP_CLI` in Python). There is no config file
+and no credential store. Captured CLI output on failure is untrusted text:
 C/C++ retain up to 511 bytes in the C error buffer, Python keeps the last 2000
 characters, and Rust does not expose captured output at all. Sanitize any
 captured tail before logging or sharing; see

@@ -20,9 +20,10 @@ see [ARCHITECTURE.md](ARCHITECTURE.md) for that boundary.
 
 Every binding follows the same small contract:
 
-1. It takes a CLI path (an explicit argument in C/C++/Rust; an argument,
-   `$GAMERECOMP_CLI`, or the name `game-recomp-cli` on `PATH` in Python) and
-   rejects a missing/non-file path before running anything.
+1. It takes a CLI path (an explicit argument in C/C++/Rust; an explicit
+   argument, `$GAMERECOMP_CLI`, or the bare name `game-recomp-cli` in Python,
+   in that order of precedence) and rejects a missing/non-file path before
+   running anything.
 2. It starts the CLI as a child process with an argument vector — **no shell
    interpolation** of the paths:
    `run <pe> --project-dir <project> --no-table --no-progress`.
@@ -169,7 +170,8 @@ not asserted by this document.
 
 | Symptom | Likely cause / action |
 |---|---|
-| `CLI binary does not exist` | Set `GAMERECOMP_CLI` (Python) or pass a valid CLI path; Rust/Python require a regular file, C/C++ require an existing path. |
+| `CLI binary does not exist` even though the CLI is on `PATH` | Python validates with `Path(cli).is_file()`; a bare name is not searched on `PATH`. Set `GAMERECOMP_CLI` to an absolute path or pass `--cli` with one. |
+| `CLI binary does not exist` for other reasons | Rust/Python require a regular file; C/C++ require an existing path. |
 | `failed to execute CLI …: Permission denied` | The file exists but is not executable; `chmod +x` it. C reports the OS reason explicitly. |
 | `project_dir is not an existing directory` (C/C++) | Create the project directory first; C/C++ require it before spawning the CLI. |
 | `pipeline produced no report.json` / `Error::NoReport` | CLI exited 0 but wrote no report: check the CLI build/version, arguments and project path. |
