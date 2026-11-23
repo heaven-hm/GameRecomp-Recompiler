@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+# Imported targets: gamerecomp::c, gamerecomp::c_shared, gamerecomp::cpp,
+# gamerecomp::cpp_shared.
+include("${CMAKE_CURRENT_LIST_DIR}/gamerecomp-targets.cmake")
+
+check_required_components(gamerecomp)
