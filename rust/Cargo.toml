@@ -1,0 +1,10 @@
+[package]
+name = "gamerecomp-sdk"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Rust client SDK for the GameReComp PE32 x86 recompilation pipeline"
+
+[lib]
+name = "gamerecomp_sdk"
+path = "src/lib.rs"

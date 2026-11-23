@@ -1,0 +1,1 @@
+/Users/haseeb-mir/Documents/Code/GameRecomp-Recompiler/rust/target/debug/examples/basic: /Users/haseeb-mir/Documents/Code/GameRecomp-Recompiler/rust/examples/basic.rs /Users/haseeb-mir/Documents/Code/GameRecomp-Recompiler/rust/src/lib.rs
