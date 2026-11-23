@@ -54,6 +54,8 @@ cat > "$TMP/eintr.c" <<'EOF'
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+/* POSIX feature test macros must precede any header on glibc. */
+#define _POSIX_C_SOURCE 200809L
 static void on_alrm(int sig) { (void)sig; }
 int main(int argc, char **argv) {
     struct sigaction sa;
