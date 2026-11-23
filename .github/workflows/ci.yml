@@ -1,19 +1,47 @@
 name: SDK verification
+
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-verification-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.check }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        check: [python, rust, c, cpp]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Python
+        if: matrix.check == 'python'
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Python SDK
+        if: matrix.check == 'python'
+        env:
+          PYTHONPATH: python
         run: python3 -m pytest python/tests -q
+
       - name: Rust SDK
+        if: matrix.check == 'rust'
         working-directory: rust
         run: cargo test
+
       - name: C SDK
+        if: matrix.check == 'c'
         run: sh tests/test_c_sdk.sh
+
       - name: C++ SDK
+        if: matrix.check == 'cpp'
         run: sh tests/test_cpp_sdk.sh
