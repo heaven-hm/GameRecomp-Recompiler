@@ -131,6 +131,7 @@ jobs:
           log_dir="$RUNNER_TEMP/sdk-logs"
           mkdir -p "$log_dir"
           sh tests/test_cpp_sdk.sh 2>&1 | tee "$log_dir/cpp.log"
+          sh tests/test_cmake_install.sh 2>&1 | tee "$log_dir/cmake-package.log"
 
       # Always upload, including on failure, so a red matrix cell is debuggable.
       - name: Upload test log
