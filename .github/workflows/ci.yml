@@ -16,7 +16,9 @@ concurrency:
 # Single source of truth for pinned tool versions. Bump deliberately and in a
 # separate commit so a CI-tool change is never mixed with a code change.
 env:
-  PYTHON_VERSION: '3.12.9'
+  # 3.12.9 is unavailable on current ubuntu-latest images; use the maintained
+  # 3.12 line so setup-python selects an available patch release per runner.
+  PYTHON_VERSION: '3.12'
   PYTEST_VERSION: '8.3.4'
   RUST_VERSION: '1.83.0'
 
