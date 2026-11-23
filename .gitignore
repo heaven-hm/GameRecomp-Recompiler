@@ -1,0 +1,8 @@
+# Build and test artifacts
+rust/target/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.o
+basic
+basic_cpp

@@ -11,12 +11,12 @@ recompilation pipeline.
 
 ## Languages
 
-| Language | Location | Entry point |
-|---|---|---|
-| C | `include/gamerecomp_sdk.h`, `src/gamerecomp_sdk.c` | `gr_client_init`, `gr_recompile` |
-| C++ | `cpp/include/gamerecomp_sdk.hpp` | `gamerecomp::Client::recompile` |
-| Rust | `rust/` | `gamerecomp_sdk::Client::recompile` |
-| Python | `python/` | `gamerecomp_sdk.Client.recompile` |
+| Language | Location | Entry point | Detailed guide |
+|---|---|---|---|
+| C | `include/gamerecomp_sdk.h`, `src/gamerecomp_sdk.c` | `gr_client_init`, `gr_recompile` | [`docs/C.md`](docs/C.md) |
+| C++ | `cpp/include/gamerecomp_sdk.hpp` | `gamerecomp::Client::recompile` | [`docs/CPP.md`](docs/CPP.md) |
+| Rust | `rust/` | `gamerecomp_sdk::Client::recompile` | [`docs/RUST.md`](docs/RUST.md) |
+| Python | `python/` | `gamerecomp_sdk.Client.recompile` | [`docs/PYTHON.md`](docs/PYTHON.md) |
 
 Each binding exposes the same three operations:
 
