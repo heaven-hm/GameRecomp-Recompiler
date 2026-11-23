@@ -27,6 +27,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Python test tools
+        if: matrix.check == 'python'
+        run: python3 -m pip install pytest
+
       - name: Python SDK
         if: matrix.check == 'python'
         env:

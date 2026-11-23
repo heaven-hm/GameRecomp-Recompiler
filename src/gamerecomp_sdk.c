@@ -26,11 +26,19 @@ static int is_dir(const char *p) {
     return p && stat(p, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
+/* strdup is POSIX, not C11; keep the SDK buildable with strict -std=c11. */
+static char *dup_string(const char *s) {
+    size_t n = strlen(s) + 1u;
+    char *out = (char *)malloc(n);
+    if (out) memcpy(out, s, n);
+    return out;
+}
+
 int gr_client_init(gr_client *c, const char *cli_path) {
     if (!c || !cli_path || !*cli_path) return -1;
     memset(c, 0, sizeof *c);
     if (!exists(cli_path)) { seterr(c, "CLI binary does not exist"); return -1; }
-    c->cli = strdup(cli_path);
+    c->cli = dup_string(cli_path);
     return c->cli ? 0 : -1;
 }
 
