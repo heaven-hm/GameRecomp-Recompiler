@@ -31,10 +31,22 @@ Client.recompile(pe, project) -> dict
 # Runs: <cli> run <pe> --project-dir <project> --no-table --no-progress
 # Raises RecompileError on non-zero exit or missing report.json.
 # Returns the parsed reports/report.json dictionary.
+
+Client.recompile_to_path(pe, project) -> Path
+# Runs the same pipeline as recompile(), but returns the pathlib.Path of the
+# generated <project>/reports/report.json instead of parsing its contents.
+# Raises the same RecompileError cases as recompile().
+
+Client.inspect(pe) -> dict
+# Runs: <cli> inspect <pe> --json
+# Returns the parsed JSON object printed by the CLI (metadata about the PE).
+# No project directory is needed and no files are written.
+# Raises RecompileError on a missing PE, non-zero exit, or invalid JSON.
 ```
 
 `RecompileError` is a `RuntimeError` subclass with the CLI output tail included
-on failure.
+on failure. CLI and report failures are surfaced through it by all three
+methods.
 
 ## Full example
 
@@ -63,11 +75,46 @@ GAMERECOMP_CLI=/path/to/game-recomp-cli \
 python3 python/examples/basic.py --pe game.exe --project /tmp/project
 ```
 
+## Inspecting a PE and locating the report
+
+`inspect()` returns the CLI's PE metadata without running a recompile or
+needing a project directory:
+
+```python
+from gamerecomp_sdk import Client
+
+client = Client()
+info = client.inspect('game.exe')
+print(info.get('machine'), len(info.get('sections', [])))
+```
+
+`recompile_to_path()` is useful when you want the generated report file itself
+(for archiving, diffing, or passing to another tool) rather than the parsed
+dictionary returned by `recompile()`:
+
+```python
+import json
+
+report_path = client.recompile_to_path('game.exe', '/tmp/project')
+print(report_path)                       # /tmp/project/reports/report.json
+report = json.loads(report_path.read_text())
+# Equivalent to: report = client.recompile('game.exe', '/tmp/project')
+```
+
+The example script exposes both through flags:
+
+```sh
+PYTHONPATH=python python3 python/examples/basic.py --pe game.exe \
+    --project /tmp/project --inspect
+PYTHONPATH=python python3 python/examples/basic.py --pe game.exe \
+    --project /tmp/project --report-path
+```
+
 Verify the SDK plumbing without a long build:
 
 ```sh
 PYTHONPATH=python python3 -m pytest python/tests -q
-# 4 passed
+# 13 passed
 ```
 
 ## Reading common report fields
@@ -91,6 +138,7 @@ inflate it. `verification: partial` is not a gameplay pass.
 | PE missing | `RecompileError("PE32 input does not exist: ...")` |
 | CLI non-zero | `RecompileError("CLI exited N: <tail>")` |
 | No report | `RecompileError("pipeline produced no report.json")` |
+| Inspect output not JSON | `RecompileError("CLI produced invalid JSON: <tail>")` |
 
 ## Real proven run
 
