@@ -3,7 +3,7 @@
 This directory documents a **shared, real-CLI integration harness** for the
 SDK bindings. It complements (never replaces) the fake-CLI unit tests in
 `tests/test_c_sdk.sh`, `tests/test_cpp_sdk.sh`, the Python `pytest` suite and
-the Rust `cargo test` suite.
+the Rust `blaze test` suite.
 
 ## Scope — read this first
 

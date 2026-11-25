@@ -33,7 +33,7 @@ architecture: arm64
 |---|---|
 | Python | 3.12.1 (`python3 --version`) |
 | pytest | 9.1.0 (`python3 -m pytest --version`) |
-| cargo | 1.100.0 (`cargo --version`) |
+| cargo | 1.100.0 (`blaze --version`) |
 | rustc | 1.100.0 (`rustc --version`) |
 | cc / c++ | Apple clang 16.0.0, target `arm64-apple-darwin27.2.0` |
 
@@ -49,7 +49,7 @@ scripts' own scratch directories, reproduced verbatim as evidence.
 | Binding | Command (worktree root unless noted) | Exit code | Result |
 |---|---|---:|---|
 | Python | `PYTHONPATH=python python3 -m pytest python/tests -q` | 0 | PASS — 13 tests |
-| Rust | `cd rust && cargo test` | 0 | PASS — 15 unit tests, 0 doc tests |
+| Rust | `cd rust && blaze test` | 0 | PASS — 15 unit tests, 0 doc tests |
 | C | `sh tests/test_c_sdk.sh` | 0 | PASS |
 | C++ | `sh tests/test_cpp_sdk.sh` | 0 | PASS (4 pre-existing compiler warnings) |
 
@@ -71,7 +71,7 @@ tests" for Python. The base commit actually collects 13 test functions in
 ### Rust — verbatim output
 
 ```text
-$ cd rust && cargo test
+$ cd rust && blaze test
    Compiling gamerecomp-sdk v0.1.0 (/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdkprod/10/rust)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.42s
      Running unittests src/lib.rs (target/debug/build/gamerecomp-sdk/283bab5681fa0dce/out/gamerecomp_sdk-283bab5681fa0dce)
@@ -196,7 +196,7 @@ Consequences — explicitly NOT TESTED on Linux:
 
 - Python: `PYTHONPATH=python python3 -m pytest python/tests -q` on a Linux
   kernel / glibc.
-- Rust: `cd rust && cargo test` on a Linux target.
+- Rust: `cd rust && blaze test` on a Linux target.
 - C: `sh tests/test_c_sdk.sh` on glibc, including the
   `_POSIX_C_SOURCE 200809L` feature-macro placement (commits `98dc945` and
   `d931c02` exist specifically for glibc) and the EINTR capture path.
@@ -256,7 +256,7 @@ The single `json` fenced block below is the source of truth consumed by
       "binding": "rust",
       "platform": "macos",
       "status": "passed",
-      "command": "cd rust && cargo test",
+      "command": "cd rust && blaze test",
       "exit_code": 0,
       "summary": "15 unit tests passed; 0 doc tests"
     },
@@ -296,7 +296,7 @@ The single `json` fenced block below is the source of truth consumed by
       "binding": "rust",
       "platform": "linux",
       "status": "blocked",
-      "command": "cd rust && cargo test",
+      "command": "cd rust && blaze test",
       "exit_code": null,
       "summary": "NOT TESTED: no Linux daemon or guest available",
       "reason": "No running container daemon, no Lima/Colima VM instance, and no cached Linux guest image on this macOS arm64 host.",

@@ -1,6 +1,6 @@
 //! Integration tests against a *real* `game-recomp-cli`.
 //!
-//! These tests are deliberately opt-in so that `cargo test` stays hermetic in
+//! These tests are deliberately opt-in so that `blaze test` stays hermetic in
 //! CI. Supply a real CLI path via `GAMERECOMP_CLI` and a PE32 input via
 //! `GAMERECOMP_TEST_PE`; when either is absent the test prints an explicit
 //! skip reason and passes.
@@ -8,7 +8,7 @@
 //! ```sh
 //! GAMERECOMP_CLI=/path/to/game-recomp-cli \
 //! GAMERECOMP_TEST_PE=/path/to/game.exe \
-//!     cargo test --test integration -- --nocapture
+//!     blaze test --test integration -- --nocapture
 //! ```
 //!
 //! Both variables are read from the environment rather than hard-coded, and

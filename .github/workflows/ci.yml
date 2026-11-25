@@ -83,37 +83,31 @@ jobs:
           python3 -m pytest python/tests -q 2>&1 | tee "$log_dir/python.log"
 
       # --- Rust -------------------------------------------------------------
-      - name: Install pinned Rust toolchain
+      - name: Install Blaze
         if: matrix.check == 'rust'
         run: |
           set -euo pipefail
-          rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update
-          rustup default "${RUST_VERSION}"
-          rustc --version
-          cargo --version
+          curl -fsSL https://ix.dev/blaze | sh
+          blaze --version
 
-      - name: Cache Cargo registry and build directory
+      - name: Cache Blaze build state
         if: matrix.check == 'rust'
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
+            ~/.blaze
             rust/target
-          # Scoped by runner, toolchain and dependency graph. Deliberately no
-          # loose restore-keys, so a stale toolchain cache cannot be restored.
-          key: ${{ runner.os }}-cargo-rust${{ env.RUST_VERSION }}-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          key: ${{ runner.os }}-blaze-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
           enableCrossOsArchive: false
 
-      - name: Rust SDK
+      - name: Rust SDK (Blaze)
         if: matrix.check == 'rust'
         working-directory: rust
         run: |
           set -o pipefail
           log_dir="$RUNNER_TEMP/sdk-logs"
           mkdir -p "$log_dir"
-          cargo test 2>&1 | tee "$log_dir/rust.log"
+          blaze test 2>&1 | tee "$log_dir/rust.log"
 
       # --- C / C++ ----------------------------------------------------------
       - name: C SDK

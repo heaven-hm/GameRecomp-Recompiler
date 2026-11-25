@@ -25,7 +25,7 @@ ALLOWED_STATUSES = PASSING_STATUSES | BLOCKED_STATUSES
 
 EXPECTED_COMMANDS = {
     "python": "PYTHONPATH=python python3 -m pytest python/tests -q",
-    "rust": "cd rust && cargo test",
+    "rust": "cd rust && blaze test",
     "c": "sh tests/test_c_sdk.sh",
     "cpp": "sh tests/test_cpp_sdk.sh",
 }

@@ -18,7 +18,7 @@ so only library sources, examples and tests enter the packaged crate.
 
 ```sh
 cd rust
-cargo test
+blaze test
 cargo package --list     # inspect the exact files that would be published
 cargo package            # build .crate locally (does not publish)
 ```
@@ -151,12 +151,12 @@ exercises a fake CLI, PE and project directory whose names contain spaces.
 
 `rust/tests/integration.rs` runs against a real CLI when one is configured.
 It reads configuration from the environment; when a value is missing it prints
-an explicit skip reason and passes, so `cargo test` remains hermetic:
+an explicit skip reason and passes, so `blaze test` remains hermetic:
 
 ```sh
 GAMERECOMP_CLI=/path/to/game-recomp-cli \
 GAMERECOMP_TEST_PE=/path/to/game.exe \
-    cargo test --test integration -- --nocapture
+    blaze test --test integration -- --nocapture
 ```
 
 - `GAMERECOMP_CLI` — path to a real `game-recomp-cli` (required for the tests
@@ -173,8 +173,8 @@ location is baked into the repository.
 
 ```sh
 cd rust
-cargo run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
+blaze run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
 # optional per-command timeout:
 GAMERECOMP_TIMEOUT_MS=300000 \
-  cargo run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
+  blaze run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
 ```

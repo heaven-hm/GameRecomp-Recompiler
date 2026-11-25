@@ -11,6 +11,10 @@ recompilation pipeline.
 > [SECURITY.md](docs/SECURITY.md) for key and error handling, and
 > [API_CONSISTENCY.md](docs/API_CONSISTENCY.md) for the exact cross-language API.
 
+## Quickstart
+
+Start with [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for a copy-paste v0.3.0 setup.
+
 ## Languages
 
 | Language | Location | Entry point | Detailed guide |
@@ -49,7 +53,7 @@ PYTHONPATH=python python3 python/examples/basic.py --help
 python3 -m pip install -e python
 
 # Rust: run the example in-tree, or add a path dependency in your Cargo.toml
-cd rust && cargo test && cargo run --example basic -- <cli> <pe> <project>
+cd rust && blaze test && blaze run --example basic -- <cli> <pe> <project>
 
 # C / C++: compile the C implementation into your program (POSIX, C11/C++17)
 cc -std=c11 -Wall -Wextra -Iinclude src/gamerecomp_sdk.c c/examples/basic.c -o basic
@@ -79,7 +83,7 @@ GAMERECOMP_CLI=/path/to/game-recomp-cli \
   PYTHONPATH=python python3 python/examples/basic.py --pe game.exe --project /tmp/project
 
 # Rust
-cd rust && cargo run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
+cd rust && blaze run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
 
 # C / C++ proof scripts (use a temporary fake CLI; no real recompile)
 sh tests/test_c_sdk.sh
@@ -112,7 +116,7 @@ Run all four checks locally:
 
 ```sh
 PYTHONPATH=python python3 -m pytest python/tests -q   # 13 passed
-(cd rust && cargo test)                               # 15 unit tests + example build
+(cd rust && blaze test)                               # 15 unit tests + example build
 sh tests/test_c_sdk.sh                                # C SDK: PASS
 sh tests/test_cpp_sdk.sh                              # C++ SDK: PASS
 ```
@@ -127,7 +131,7 @@ status, which must be checked at the repository's CI page.
 | Check | Command | Ubuntu | macOS | What it verifies | Local result |
 |---|---|:---:|:---:|---|---|
 | Python | `PYTHONPATH=python python3 -m pytest python/tests -q` | ✓ | ✓ | 13 tests: CLI/PE validation, success, CLI failure, `inspect`, `recompile_to_path` (subprocess is mocked) | 13 passed |
-| Rust | `cd rust && cargo test` | ✓ | ✓ | 15 unit tests, including 3 Unix fake-CLI subprocess tests; example is built | 15 passed |
+| Rust | `cd rust && blaze test` | ✓ | ✓ | 15 unit tests, including 3 Unix fake-CLI subprocess tests; example is built | 15 passed |
 | C | `sh tests/test_c_sdk.sh` | ✓ | ✓ | `-Wall -Wextra` compile, fake-CLI report path, project-dir validation, exec error, `EINTR` handling | PASS |
 | C++ | `sh tests/test_cpp_sdk.sh` | ✓ | ✓ | `-Wall -Wextra` compile, fake-CLI report, `Report::score()` present/absent (no exception test) | PASS |
 
