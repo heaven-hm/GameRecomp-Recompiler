@@ -1,19 +1,73 @@
 # GameRecomp-Recompiler SDK
 
-Language bindings and examples for the existing **GameReComp** PE32/x86 static
-recompilation pipeline.
+**A general-purpose recompilation SDK, built from the ground up on PCRecomp.**
 
-> **Scope (important):** this repository does **not** contain a second
-> recompiler, loader or lifter. It is a thin client SDK that invokes an existing
-> GameReComp CLI (`game-recomp-cli run`) and reads its report. A rev.ng-class
-> decompiler is a separate, much larger project; this SDK does not claim to be
-> one. See [CONTRIBUTING.md](docs/CONTRIBUTING.md) before adding code,
-> [SECURITY.md](docs/SECURITY.md) for key and error handling, and
-> [API_CONSISTENCY.md](docs/API_CONSISTENCY.md) for the exact cross-language API.
+This is the client layer of the GameReComp project: one stable, language-neutral
+contract for driving a real PE32/x86 static recompiler from C, C++, Rust and
+Python. PCRecomp is the baseline recompiler underneath; this repository adds
+the portable SDK, the cross-language API discipline and the evidence contract.
+The long-term goal is general-purpose PC software and game recompilation; the
+**verified scope today is PE32/i386 through GameReComp CLI v0.3.0**. claim of
+universal game support is made: architectures, formats and GameBox/D3D-class
+targets that have not passed their own gates stay BLOCKED or DEFERRED.
+
+> **Boundary:** this repository does **not** contain a second recompiler,
+> loader or lifter. Every binding invokes `game-recomp-cli run` as a child
+> process and reads `<project>/reports/report.json`. A rev.ng-class decompiler
+> is a separate, much larger project and is not vendored here. See
+> [ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+> [CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
+## What makes it different
+
+1. **One contract, four languages.** C, C++, Rust and Python all validate the
+   CLI path, spawn `run <pe> --project-dir <dir> --no-table --no-progress`
+   without a shell, and require both exit 0 and a real `report.json`. No
+   binding can quietly report success from a dry run or a missing file.
+2. **No second recompiler.** PCRecomp remains the mechanical recompiler and
+   Win32 runtime in GameReComp. This SDK is the reusable front door, not a fork
+   of the lifter or a competing runtime.
+3. **Fail-closed by construction.** Missing CLI, missing PE, failed exec,
+   non-zero pipeline exit, invalid JSON or missing report all produce explicit
+   errors. The SDK never invents a score, a frame or a gameplay verdict.
+4. **Evidence over claims.** Scores are process-level measures. See
+   [REAL_RUN.md](docs/REAL_RUN.md) for a real PE32 game and
+   [RELEASE_0.3.0](https://github.com/heaven-hm/GameReComp/blob/v0.3.0/docs/RELEASE_0.3.0.md)
+   for the current evidence and limits. No 100% or gameplay-equivalence claim
+   is derived from a successful SDK call.
+
+## Minimal examples
+
+```python
+# Python
+from gamerecomp_sdk import Client
+report = Client("/abs/path/to/game-recomp-cli").recompile("game.exe", "out")
+print(report["score"])
+```
+
+```rust
+// Rust (cd rust && blaze run --example basic -- <cli> <pe> <project>)
+use gamerecomp_sdk::Client;
+let report = Client::new("/abs/path/to/game-recomp-cli")?.recompile("game.exe", "out")?;
+println!("{:?}", report.score);
+```
+
+```c
+/* C: see docs/C.md and c/examples/basic.c */
+gr_client *c = gr_client_init("/abs/path/to/game-recomp-cli");
+char *report = gr_recompile(c, "game.exe", "out");
+```
+
+```cpp
+// C++: see docs/CPP.md and cpp/examples/basic.cpp
+gamerecomp::Client c("/abs/path/to/game-recomp-cli");
+auto report = c.recompile("game.exe", "out");
+```
+
+Full copy-paste commands for all four languages are in
+[QUICKSTART.md](docs/QUICKSTART.md) and [EXAMPLES.md](docs/EXAMPLES.md).
 
 ## Quickstart
-
-Start with [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for a copy-paste v0.3.0 setup.
 
 ## Languages
 
