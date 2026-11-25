@@ -22,7 +22,7 @@ PYTHONPATH=python python3 python/examples/basic.py --help
 python3 -m pip install -e python          # optional editable install
 
 # Rust (no external crates)
-cd rust && cargo test
+cd rust && blaze test
 
 # C / C++ (POSIX compilers)
 cc -std=c11 -Wall -Wextra -Iinclude src/gamerecomp_sdk.c c/examples/basic.c -o basic
@@ -54,12 +54,12 @@ fake CLI script created in `setUp`.
 
 ```sh
 cd rust
-cargo test                                                  # 15 unit tests
-cargo run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
+blaze test                                                  # 15 unit tests
+blaze run --example basic -- /path/to/game-recomp-cli game.exe /tmp/project
 ```
 
-Verified: `cargo test` passes 15 tests — 12 parser/validation tests plus 3
-Unix-only tests that launch a shell-script fake CLI end to end. `cargo test`
+Verified: `blaze test` passes 15 tests — 12 parser/validation tests plus 3
+Unix-only tests that launch a shell-script fake CLI end to end. `blaze test`
 also builds `examples/basic.rs`. The example prints the report path, the
 parsed score (`Option<i64>`) and the raw `report.json` text via
 `Report::report_json()`.
