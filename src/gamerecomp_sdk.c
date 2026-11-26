@@ -116,17 +116,9 @@ gr_result gr_client_init_ex(gr_client *c, const char *cli_path) {
     return make_result(c, GR_OK, NULL);
 }
 
-gr_result gr_recompile_ex(gr_client *c, const char *pe_path,
+static gr_result run_argv(gr_client *c, char *const argv[],
                           const char *project_dir,
                           char *report_path, size_t report_path_size) {
-    if (!c || !c->cli || !pe_path || !project_dir)
-        return make_result(c, GR_ERR_INVALID_ARGUMENT, "invalid argument");
-    if (!exists(pe_path))
-        return make_result(c, GR_ERR_NOT_FOUND, "PE32 input does not exist");
-    if (!is_dir(project_dir))
-        return make_result(c, GR_ERR_NOT_DIRECTORY,
-                           "project_dir is not an existing directory");
-
     int pipefd[2];
     if (pipe(pipefd) != 0)
         return make_result(c, GR_ERR_PIPE_FAILED, "pipe failed");
@@ -160,9 +152,6 @@ gr_result gr_recompile_ex(gr_client *c, const char *pe_path,
             close(pipefd[1]);
         /* Casts keep this translation unit warning-free when a C++ consumer
          * compiles it directly (tests/test_cpp_sdk.sh does). */
-        char *argv[] = { c->cli, (char *)"run", (char *)pe_path,
-                         (char *)"--project-dir", (char *)project_dir,
-                         (char *)"--no-table", (char *)"--no-progress", NULL };
         execvp(c->cli, argv);
         int child_errno = errno;
         ssize_t ignored = write(errpipe[1], &child_errno, sizeof child_errno);
@@ -238,6 +227,56 @@ gr_result gr_recompile_ex(gr_client *c, const char *pe_path,
     }
     c->error[0] = 0;
     return make_result(c, GR_OK, NULL);
+}
+
+gr_result gr_recompile_ex(gr_client *c, const char *pe_path,
+                          const char *project_dir,
+                          char *report_path, size_t report_path_size) {
+    if (!c || !c->cli || !pe_path || !project_dir)
+        return make_result(c, GR_ERR_INVALID_ARGUMENT, "invalid argument");
+    if (!exists(pe_path))
+        return make_result(c, GR_ERR_NOT_FOUND, "PE32 input does not exist");
+    if (!is_dir(project_dir))
+        return make_result(c, GR_ERR_NOT_DIRECTORY,
+                           "project_dir is not an existing directory");
+
+    char *argv[] = { c->cli, (char *)"run", (char *)pe_path,
+                     (char *)"--project-dir", (char *)project_dir,
+                     (char *)"--no-table", (char *)"--no-progress", NULL };
+    return run_argv(c, argv, project_dir, report_path, report_path_size);
+
+}
+
+
+gr_result gr_build(gr_client *c, const char *pe_path, const char *project_dir,
+                   const gr_build_options *opt,
+                   char *report_path, size_t report_path_size) {
+    if (!c || !c->cli || !pe_path || !project_dir)
+        return make_result(c, GR_ERR_INVALID_ARGUMENT, "invalid argument");
+    if (!exists(pe_path))
+        return make_result(c, GR_ERR_NOT_FOUND, "PE32 input does not exist");
+    if (!is_dir(project_dir))
+        return make_result(c, GR_ERR_NOT_DIRECTORY,
+                           "project_dir is not an existing directory");
+    char *argv[20];
+    size_t n = 0;
+    argv[n++] = c->cli;
+    argv[n++] = (char *)"run";
+    argv[n++] = (char *)pe_path;
+    argv[n++] = (char *)"--project-dir";
+    argv[n++] = (char *)project_dir;
+    argv[n++] = (char *)"--no-table";
+    argv[n++] = (char *)"--no-progress";
+    if (opt) {
+        if (opt->input_os)      { argv[n++] = (char *)"--input-os";      argv[n++] = (char *)opt->input_os; }
+        if (opt->input_arch)    { argv[n++] = (char *)"--input-arch";    argv[n++] = (char *)opt->input_arch; }
+        if (opt->target_os)     { argv[n++] = (char *)"--target-os";     argv[n++] = (char *)opt->target_os; }
+        if (opt->target_arch)   { argv[n++] = (char *)"--target-arch";   argv[n++] = (char *)opt->target_arch; }
+        if (opt->out_mode)      { argv[n++] = (char *)"--out-mode";      argv[n++] = (char *)opt->out_mode; }
+        if (opt->skip_stages)   { argv[n++] = (char *)"--skip-stages";   argv[n++] = (char *)opt->skip_stages; }
+    }
+    argv[n] = NULL;
+    return run_argv(c, argv, project_dir, report_path, report_path_size);
 }
 
 /* Legacy wrappers: preserve the original int 0/-1 contract exactly. */

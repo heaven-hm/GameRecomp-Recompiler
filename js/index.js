@@ -51,18 +51,31 @@ class Client {
     catch (e) { throw new RecompileError('CLI produced invalid JSON', { cli: this.cli, cause: e.message }); }
   }
 
-  recompileToPath(pe, project) {
+  buildToPath(pe, project, options = {}) {
     ensureFile(pe, 'PE32 input');
     if (!project || typeof project !== 'string') {
       throw new RecompileError('project directory must be a non-empty path', { what: 'project' });
     }
     const dir = path.resolve(project);
-    this._run(['run', path.resolve(pe), '--project-dir', dir, '--no-table', '--no-progress']);
+    const args = ['run', path.resolve(pe), '--project-dir', dir, '--no-table', '--no-progress'];
+    const flags = [['--input-os', options.input_os], ['--input-arch', options.input_arch],
+      ['--target-os', options.target_os], ['--target-arch', options.target_arch],
+      ['--out-mode', options.out_mode], ['--skip-stages', options.skip_stages]];
+    for (const [flag, value] of flags) if (value) args.push(flag, String(value));
+    this._run(args);
     const report = path.join(dir, 'reports', 'report.json');
     if (!fs.existsSync(report)) {
       throw new RecompileError('pipeline produced no report.json', { cli: this.cli, report });
     }
     return report;
+  }
+
+  recompileToPath(pe, project) {
+    return this.buildToPath(pe, project);
+  }
+
+  build(pe, project, options = {}) {
+    return JSON.parse(require('node:fs').readFileSync(this.buildToPath(pe, project, options), 'utf8'));
   }
 
   recompile(pe, project) {

@@ -68,3 +68,28 @@ test('invalid JSON is an error', () => {
   const { cli, pe } = fixture('bad-json');
   assert.throws(() => new Client(cli).inspect(pe), /invalid JSON/);
 });
+
+test('build passes guest and host options', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr-sdk-build-'));
+  const pe = path.join(dir, 'game.exe');
+  fs.writeFileSync(pe, 'MZ synthetic');
+  const log = path.join(dir, 'argv.txt');
+  const cli = path.join(dir, 'cli');
+  fs.writeFileSync(cli, `#!/bin/sh\nprintf '%s\\n' "$@" > "$GR_ARGV_LOG"\nmkdir -p "$4/reports"\nprintf '{"score":70}' > "$4/reports/report.json"\n`);
+  fs.chmodSync(cli, 0o755);
+  process.env.GR_ARGV_LOG = log;
+  const client = new Client(cli);
+  const report = client.build(pe, path.join(dir, 'out'), {
+    input_os: 'windows', input_arch: 'x86', target_os: 'macos',
+    target_arch: 'arm64', out_mode: 'full', skip_stages: 'verify'
+  });
+  assert.equal(report.score, 70);
+  const args = fs.readFileSync(log, 'utf8').trim().split('\n');
+  for (const [f, v] of [['--input-os','windows'],['--input-arch','x86'],['--target-os','macos'],['--target-arch','arm64'],['--out-mode','full'],['--skip-stages','verify']]) {
+    assert.ok(args.includes(f));
+    assert.ok(args.includes(v));
+  }
+});

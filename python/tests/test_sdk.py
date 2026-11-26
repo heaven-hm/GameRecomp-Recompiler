@@ -138,3 +138,31 @@ class SdkTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BuildOptionsTest(unittest.TestCase):
+    def test_build_passes_guest_and_host_flags(self):
+        import tempfile, os, pathlib
+        from gamerecomp_sdk import Client, BuildOptions
+        with tempfile.TemporaryDirectory() as d:
+            pe = pathlib.Path(d) / 'game.exe'
+            pe.write_bytes(b'MZ synthetic')
+            arglog = pathlib.Path(d) / 'argv.txt'
+            cli = pathlib.Path(d) / 'cli'
+            cli.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$GR_ARGV_LOG"\nexit 0\n')
+            cli.chmod(0o755)
+            os.environ['GR_ARGV_LOG'] = str(arglog)
+            project = pathlib.Path(d) / 'out'; project.mkdir()
+            (project / 'reports').mkdir()
+            (project / 'reports' / 'report.json').write_text('{"score":70}')
+            opt = BuildOptions(input_os='windows', input_arch='x86',
+                               target_os='macos', target_arch='arm64',
+                               out_mode='full', skip_stages='verify')
+            report = Client(str(cli)).build(pe, project, opt)
+            self.assertEqual(report['score'], 70)
+            args = arglog.read_text().splitlines()
+            for flag, value in (('--input-os','windows'),('--input-arch','x86'),
+                                ('--target-os','macos'),('--target-arch','arm64'),
+                                ('--out-mode','full'),('--skip-stages','verify')):
+                self.assertIn(flag, args)
+                self.assertIn(value, args)

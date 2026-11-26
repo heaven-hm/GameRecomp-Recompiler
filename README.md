@@ -40,29 +40,39 @@ targets that have not passed their own gates stay BLOCKED or DEFERRED.
 
 ```python
 # Python
-from gamerecomp_sdk import Client
-report = Client().recompile("game.exe", "out")
+from gamerecomp_sdk import Client, BuildOptions
+report = Client().build("game.exe", "out", BuildOptions(
+    input_os="windows", input_arch="x86",
+    target_os="macos", target_arch="arm64", out_mode="full"))
 print(report["score"])
 ```
 
 ```rust
 // Rust (engine discovered internally; no CLI path in the API)
-use gamerecomp_sdk::Client;
-let report = Client::from_env()?.recompile("game.exe", "out")?;
+use gamerecomp_sdk::{Client, BuildOptions};
+let report = Client::from_env()?.build("game.exe", "out",
+    BuildOptions::default().input_os("windows").input_arch("x86")
+        .target_os("macos").target_arch("arm64").out_mode("full"))?;
 println!("{:?}", report.score);
 ```
 
 ```c
 /* C: see docs/C.md and c/examples/basic.c */
 gr_client c; char path[1024];
+gr_build_options opt = GR_BUILD_OPTIONS_DEFAULT;
+opt.input_os = "windows"; opt.input_arch = "x86";
+opt.target_os = "macos"; opt.target_arch = "arm64"; opt.out_mode = "full";
 gr_client_init_default(&c);
-gr_recompile(&c, "game.exe", "out", path, sizeof path);
+gr_build(&c, "game.exe", "out", &opt, path, sizeof path);
 ```
 
 ```cpp
 // C++: see docs/CPP.md and cpp/examples/basic.cpp
 gamerecomp::Client c;
-auto report = c.recompile("game.exe", "out");
+gamerecomp::BuildOptions opt;
+opt.input_os = "windows"; opt.input_arch = "x86";
+opt.target_os = "macos"; opt.target_arch = "arm64"; opt.out_mode = "full";
+auto report = c.build("game.exe", "out", opt);
 ```
 
 Full copy-paste commands for all four languages are in

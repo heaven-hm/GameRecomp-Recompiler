@@ -108,6 +108,24 @@ typedef struct gr_client {
     char error[512];    /* last error message; never contains secrets */
 } gr_client;
 
+/* High-level build options: declare the guest and host formats and pipeline
+ * shape. NULL fields are omitted and the CLI defaults apply. */
+typedef struct gr_build_options {
+    const char *input_os;      /* e.g. "windows" */
+    const char *input_arch;    /* e.g. "x86" */
+    const char *target_os;     /* e.g. "host", "macos", "linux" */
+    const char *target_arch;   /* e.g. "host", "arm64", "x86_64" */
+    const char *out_mode;      /* "source", "binary", "both", "full" */
+    const char *skip_stages;   /* comma-separated stage names */
+} gr_build_options;
+
+#define GR_BUILD_OPTIONS_DEFAULT { 0, 0, 0, 0, 0, 0 }
+
+/* Build `pe_path` into the existing `project_dir` with explicit options. */
+gr_result gr_build(gr_client *c, const char *pe_path, const char *project_dir,
+                   const gr_build_options *opt,
+                   char *report_path, size_t report_path_size);
+
 /* ------------------------------------------------------------------------- *
  * Legacy API (unchanged, kept for source and binary compatibility)
  * ------------------------------------------------------------------------- */
