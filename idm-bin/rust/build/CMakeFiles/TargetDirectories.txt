@@ -1,3 +1,0 @@
-/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/build/CMakeFiles/idman643build18.dir
-/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/build/CMakeFiles/edit_cache.dir
-/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/build/CMakeFiles/rebuild_cache.dir

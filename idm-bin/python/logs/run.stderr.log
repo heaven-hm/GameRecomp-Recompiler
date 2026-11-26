@@ -1,6 +1,0 @@
-[pe] <embedded image> mapped at 0x00400000, span 0x1B000
-[pe] bound 104 imports, 0 unresolved
-[host] C:\idman643build18.exe booted: entry 0x00405B7A, 0 unresolved imports
-[MessageBox] IDM Setup: IDM no longer supports older versions of Windows such as Windows XP or Vista.
-IDM requires Windows 7 or later.
-[win32hle] ExitProcess(0) from guest 0x00408CA5
