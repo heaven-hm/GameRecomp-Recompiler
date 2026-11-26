@@ -67,6 +67,34 @@ auto report = c.recompile("game.exe", "out");
 Full copy-paste commands for all four languages are in
 [QUICKSTART.md](docs/QUICKSTART.md) and [EXAMPLES.md](docs/EXAMPLES.md).
 
+
+## Real apps, games and proof (click the screenshots)
+
+Every SDK has a working app in [`demos/apps/`](demos/apps/) that recompiles the
+same **real PE32 x86** input through the real GameReComp CLI v0.3.0. Exact
+stdout/stderr, hashes and exit codes are in
+[`proof/apps-real/results.json`](proof/apps-real/results.json); the full write-up
+is [`docs/APPS.md`](docs/APPS.md). One browser screenshot per binding:
+
+| SDK | Working app | Proof screenshot |
+|---|---|---|
+| C | [`demos/apps/c/app.c`](demos/apps/c/app.c) | [![C app proof](proof/screenshots/c-real.jpeg)](proof/screenshots/c-real.jpeg) |
+| C++ | [`demos/apps/cpp/app.cpp`](demos/apps/cpp/app.cpp) | [![C++ app proof](proof/screenshots/cpp-real.jpeg)](proof/screenshots/cpp-real.jpeg) |
+| Python | [`demos/apps/python/app.py`](demos/apps/python/app.py) | [![Python app proof](proof/screenshots/python-real.jpeg)](proof/screenshots/python-real.jpeg) |
+| JavaScript/TypeScript | [`demos/apps/js/app.js`](demos/apps/js/app.js) | [![JS app proof](proof/screenshots/javascript-real.jpeg)](proof/screenshots/javascript-real.jpeg) |
+| Rust | [`demos/apps/rust/app.rs`](demos/apps/rust/app.rs) | [![Rust app proof](proof/screenshots/rust-real.jpeg)](proof/screenshots/rust-real.jpeg) |
+
+Run them all with [`sh demos/run_apps_real.sh`](demos/run_apps_real.sh) after
+setting `GAMERECOMP_REAL_CLI`, `GAMERECOMP_SOURCE_ROOT` and
+`GAMERECOMP_REAL_PE`. The proof input is `arith-calc.exe` (SHA-256
+`9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6`); all five
+apps exited 0 with score 85 and a real `report.json`. Verification is skipped
+because no original-Windows oracle exists — no gameplay equivalence is claimed.
+
+For game-level evidence see the companion GameReComp proof:
+[Chocolate Doom real frames and 0 unresolved imports](https://github.com/heaven-hm/GameReComp/blob/v0.3.0/docs/ISSUE_28_PROOF.md)
+and [Tetris frame evidence](https://github.com/heaven-hm/GameReComp/tree/v0.3.0/evidence/screenshots).
+
 ## Quickstart
 
 ## Languages
