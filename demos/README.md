@@ -13,11 +13,11 @@ binary; no fake CLI is used.
 
 | SDK | App | Screenshot |
 |---|---|---|
-| C | `demos/apps/c/app.c` | `proof/screenshots/c-real.jpeg` |
-| C++ | `demos/apps/cpp/app.cpp` | `proof/screenshots/cpp-real.jpeg` |
-| Python | `demos/apps/python/app.py` | `proof/screenshots/python-real.jpeg` |
-| JavaScript/TypeScript | `demos/apps/js/app.js` | `proof/screenshots/javascript-real.jpeg` |
-| Rust | `demos/apps/rust/app.rs` (Blaze-built) | `proof/screenshots/rust-real.jpeg` |
+| C | `demos/apps/c/app.c` | `proof/screenshots/terminal-c.png` |
+| C++ | `demos/apps/cpp/app.cpp` | `proof/screenshots/terminal-cpp.png` |
+| Python | `demos/apps/python/app.py` | `proof/screenshots/terminal-python.png` |
+| JavaScript/TypeScript | `demos/apps/js/app.js` | `proof/screenshots/terminal-javascript.png` |
+| Rust | `demos/apps/rust/app.rs` (Blaze-built) | `proof/screenshots/terminal-rust.png` |
 
 Exact stdout/stderr, hashes and exit codes: `proof/apps-real/results.json`.
 Scope: real PE32 recompilation proof only, no gameplay equivalence claim.
