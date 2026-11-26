@@ -1,20 +1,23 @@
-# Multi-language demos with proof
+# Working apps with real proof
 
-`sh demos/run_all.sh` runs one end-to-end demo per SDK binding against the
-deterministic `demos/fake-cli.sh`. It records stdout, stderr, exit codes and
-SHA-256 digests in `proof/demos/results.json`.
+Each SDK has a working app under `demos/apps/`. Run all five against the real
+GameReComp CLI with `sh demos/run_apps_real.sh` after setting:
 
-This is **SDK plumbing proof only**: the fake CLI writes a synthetic
-`report.json`, so no recompiler or gameplay result is claimed.
+- `GAMERECOMP_REAL_CLI` — path to the real `game-recomp-cli` v0.3.0 binary
+- `GAMERECOMP_SOURCE_ROOT` — GameReComp checkout (the CLI launcher needs it as cwd)
+- `GAMERECOMP_REAL_PE` — a real PE32 x86 input (proof used `arith-calc.exe`)
 
-| Binding | Command |
-|---|---|
-| C | `cc -std=c11 -Iinclude src/gamerecomp_sdk.c c/examples/basic.c -o basic && ./basic <cli> <pe> <project>` |
-| C++ | `c++ -std=c++17 -Iinclude -Icpp/include src/gamerecomp_sdk.c cpp/examples/basic.cpp -o basic_cpp && ./basic_cpp <cli> <pe> <project>` |
-| Python | `PYTHONPATH=python python3 python/examples/basic.py --cli <cli> --pe <pe> --project <project>` |
-| JavaScript/TypeScript | `node js/examples/basic.js <cli> <pe> <project>` |
-| Rust | `cd rust && blaze run --example basic -- <cli> <pe> <project>` |
+`demos/real-cli-wrapper.sh` appends `--skip-stages verify` because the
+fail-closed CLI exits 3 without an original-Windows oracle. It invokes the real
+binary; no fake CLI is used.
 
-Observed result (all five exit 0, stdout hashes recomputed from captured
-bytes): `proof/demos/results.json`. Browser screenshot proof:
-`proof/screenshots/sdk-demos.jpeg`.
+| SDK | App | Screenshot |
+|---|---|---|
+| C | `demos/apps/c/app.c` | `proof/screenshots/c-real.jpeg` |
+| C++ | `demos/apps/cpp/app.cpp` | `proof/screenshots/cpp-real.jpeg` |
+| Python | `demos/apps/python/app.py` | `proof/screenshots/python-real.jpeg` |
+| JavaScript/TypeScript | `demos/apps/js/app.js` | `proof/screenshots/javascript-real.jpeg` |
+| Rust | `demos/apps/rust/app.rs` (Blaze-built) | `proof/screenshots/rust-real.jpeg` |
+
+Exact stdout/stderr, hashes and exit codes: `proof/apps-real/results.json`.
+Scope: real PE32 recompilation proof only, no gameplay equivalence claim.

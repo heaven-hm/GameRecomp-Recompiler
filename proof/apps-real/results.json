@@ -1,0 +1,56 @@
+{
+  "apps": [
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "c",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=c report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/gr-sdk-app.B4P4xm/c-project/reports/report.json bytes=5788\n",
+      "stdout_sha256": "4b51d155af0c433597e5f156bedf084ceb7392248d40ba0ae4b9fd99faca053b"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "cpp",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=cpp report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/real-bin/cpp-project/reports/report.json score=85\n",
+      "stdout_sha256": "7b92070a82760ec3f69c456647739cf5a4d7a63b68fb32bc0eefc3ab37cd3ffc"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "python",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=python score=85 stages=6 report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/real-bin/python-project/reports/report.json\n",
+      "stdout_sha256": "6064c8bba29d5fae245ad8ac544f93669838955c8799d3742d28619b24496313"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "javascript",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=javascript score=85 stages=6 report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/real-bin/js-project/reports/report.json\n",
+      "stdout_sha256": "2a4d033d9a7bbad75ddb9c819573565ccbb68f982f6445ba19752e5f508fed58"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "rust",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=rust score=Some(85) report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/real-bin/rust-project2/reports/report.json json_bytes=5826\n",
+      "stdout_sha256": "78452d8b884ceb6ffe7630b84fa685cf6ea556ebc432874452036c5bc54d4d16"
+    }
+  ],
+  "cli": "GameReComp-cli-v0.3.0-macos-arm64",
+  "cli_wrapper": "demos/real-cli-wrapper.sh (adds --skip-stages verify; no fake CLI)",
+  "contract": "one working app per binding against the REAL GameReComp CLI v0.3.0",
+  "input_pe": "arith-calc.exe",
+  "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6",
+  "schema": 1,
+  "scope": "Real PE32 recompilation and real report.json; verification skipped because no Windows oracle. No gameplay equivalence."
+}
