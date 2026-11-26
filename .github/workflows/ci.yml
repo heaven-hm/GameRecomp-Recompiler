@@ -85,7 +85,7 @@ jobs:
       # --- Rust -------------------------------------------------------------
       - name: Install Kache
         if: matrix.check == 'rust'
-        uses: kunobi-ninja/kache-action@v1
+        uses: kunobi-ninja/kache-action@d073e75b1168ae6a4b3efdbe903fe0a8cc832ae8 # v1
 
       - name: Cache Kache build state
         if: matrix.check == 'rust'

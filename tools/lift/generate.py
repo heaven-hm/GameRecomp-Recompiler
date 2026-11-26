@@ -10,6 +10,7 @@ import os
 import re
 import time
 import json
+import struct
 
 # The lifter and the PE reader are siblings under tools/, not a package. This
 # file used to import them as `tools.pe_analyze` / `tools.lifter`, which have
