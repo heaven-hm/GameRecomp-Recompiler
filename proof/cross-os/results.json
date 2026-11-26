@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "source": "examples/cross_os/python/app.py (in-process Engine)",
+  "results": [
+    {
+      "direction": "windows-x86__to__macos-arm64",
+      "expected": "PARTIAL",
+      "exit_code": 0,
+      "stdout": "PORT_OK direction=windows-x86__to__macos-arm64 score=85 stages=6",
+      "stderr": "",
+      "stdout_sha256": "7f8d843a257ca38a09546e1b8484a10e3107230acb43eb7b4d7b8ccf84e5724c",
+      "report_sha256": "7da61fc9254d4c7683e5f68f55b7e3f2fafa59ce6528763557e872243b50188b",
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "windows-x86__to__linux-x86_64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=windows-x86__to__linux-x86_64 reason=unsupported target: linux/x86_64",
+      "stderr": "",
+      "stdout_sha256": "c45f0ca44fb2d3d76f9fd6e67a8cb7e823cd7fc48070b74c10b9644ef683657b",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "windows-x86__to__windows-x86_64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=windows-x86__to__windows-x86_64 reason=unsupported target: windows/x86_64",
+      "stderr": "",
+      "stdout_sha256": "1f27ea1b0ab3841c3c9ec861fabeb2ed318217282da25b171572970c2da0656b",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "windows-x64__to__macos-arm64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=windows-x64__to__macos-arm64 reason=this engine accepts only windows/x86 PE32 inputs",
+      "stderr": "",
+      "stdout_sha256": "f3c9f0755795f6255f235581798a843cce541f5d929db6da1006d9a21a254b78",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "windows-x64__to__linux-x86_64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=windows-x64__to__linux-x86_64 reason=this engine accepts only windows/x86 PE32 inputs",
+      "stderr": "",
+      "stdout_sha256": "be7ead9c1aa6abadc219847a312929b3adb60ac2ed23481fa326a5c304523406",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "dotnet-anycpu__to__macos-arm64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=dotnet-anycpu__to__macos-arm64 reason=.NET CLR lift path is absent",
+      "stderr": "",
+      "stdout_sha256": "c101b7f370f9b9c14be8d981c11299a9314471e50ec48e183918e4896ea691bb",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "linux-x86_64__to__windows-x86_64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=linux-x86_64__to__windows-x86_64 reason=this engine accepts only windows/x86 PE32 inputs",
+      "stderr": "",
+      "stdout_sha256": "0853f5c91c7d7d29d46338623ce2bfd392b918581d0e62ab9e7c24ff3fb02502",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "linux-x86_64__to__macos-arm64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=linux-x86_64__to__macos-arm64 reason=this engine accepts only windows/x86 PE32 inputs",
+      "stderr": "",
+      "stdout_sha256": "ede63a7008b0e80b2fb5dc50bed3c15f62f6bf2d1d1635942a03dcd15a42e631",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "macos-arm64__to__linux-x86_64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=macos-arm64__to__linux-x86_64 reason=this engine accepts only windows/x86 PE32 inputs",
+      "stderr": "",
+      "stdout_sha256": "675c7671771cc63986e1e930e7b40eabafc57d6448462409d60f965b109baaa6",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    },
+    {
+      "direction": "win16-ne__to__macos-arm64",
+      "expected": "DEFERRED",
+      "exit_code": 0,
+      "stdout": "PORT_DEFERRED direction=win16-ne__to__macos-arm64 reason=Win16 NE orchestration is absent",
+      "stderr": "",
+      "stdout_sha256": "a3cf8279383f94f78177a78829062a3872a917355a214cf2b929b41ae2d67872",
+      "report_sha256": null,
+      "input_sha256": "9b59ee613acc7b5a1512f8a5fcc5f65317f0fa79452d01728e1715b63f23d7a6"
+    }
+  ]
+}
