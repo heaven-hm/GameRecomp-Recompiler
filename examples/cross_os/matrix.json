@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "directions": [
+    {
+      "id": "windows-x86__to__macos-arm64",
+      "input_os": "windows",
+      "input_arch": "x86",
+      "target_os": "host",
+      "target_arch": "host",
+      "expected": "PARTIAL"
+    },
+    {
+      "id": "windows-x86__to__linux-x86_64",
+      "input_os": "windows",
+      "input_arch": "x86",
+      "target_os": "linux",
+      "target_arch": "x86_64",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "windows-x86__to__windows-x86_64",
+      "input_os": "windows",
+      "input_arch": "x86",
+      "target_os": "windows",
+      "target_arch": "x86_64",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "windows-x64__to__macos-arm64",
+      "input_os": "windows",
+      "input_arch": "x86_64",
+      "target_os": "host",
+      "target_arch": "host",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "windows-x64__to__linux-x86_64",
+      "input_os": "windows",
+      "input_arch": "x86_64",
+      "target_os": "linux",
+      "target_arch": "x86_64",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "dotnet-anycpu__to__macos-arm64",
+      "input_os": "windows",
+      "input_arch": "x86",
+      "target_os": "host",
+      "target_arch": "host",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "linux-x86_64__to__windows-x86_64",
+      "input_os": "linux",
+      "input_arch": "x86_64",
+      "target_os": "windows",
+      "target_arch": "x86_64",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "linux-x86_64__to__macos-arm64",
+      "input_os": "linux",
+      "input_arch": "x86_64",
+      "target_os": "host",
+      "target_arch": "host",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "macos-arm64__to__linux-x86_64",
+      "input_os": "macos",
+      "input_arch": "arm64",
+      "target_os": "linux",
+      "target_arch": "x86_64",
+      "expected": "DEFERRED"
+    },
+    {
+      "id": "win16-ne__to__macos-arm64",
+      "input_os": "windows",
+      "input_arch": "x86",
+      "target_os": "host",
+      "target_arch": "host",
+      "expected": "DEFERRED"
+    }
+  ]
+}

@@ -114,6 +114,11 @@ class Engine:
             raise EngineError(f"vendored engine not found: {tools}")
         if str(tools) not in sys.path:
             sys.path.insert(0, str(tools))
+        # Pipeline stages that spawn a child interpreter need the vendored
+        # tools/ package too, even though this call itself is in-process.
+        existing = os.environ.get("PYTHONPATH", "")
+        parts = [str(self.root)] + ([existing] if existing else [])
+        os.environ["PYTHONPATH"] = os.pathsep.join(parts)
 
     def build(self, pe: str | os.PathLike, project: str | os.PathLike,
               options: BuildOptions | None = None) -> dict:
