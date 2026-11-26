@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><title>GameRecomp-SDK multi-language demo proof</title>
+<style>body{font-family:-apple-system,sans-serif;background:#0f1420;color:#e8eef8;padding:32px}
+h1{font-size:24px} table{border-collapse:collapse;width:100%} td,th{border:1px solid #33405a;padding:10px;text-align:left}
+code{font-size:12px} pre{white-space:pre-wrap;font-size:12px;color:#9fe} .note{color:#fbbf24}</style></head><body>
+<h1>GameRecomp-SDK — five bindings, one contract</h1>
+<p class="note">SDK plumbing proof against a deterministic fake CLI. No recompiler, no gameplay claim.</p>
+<table><tr><th>SDK</th><th>exit</th><th>stdout SHA-256</th><th>output</th></tr><tr><td>c</td><td>0</td><td><code>fc9a006b5a1b3860ba74cc0f2520806bdb813d3370a60c8fe74a2bdeb6409105</code></td><td><pre>report=/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/c-project/reports/report.json
+</pre></td></tr><tr><td>cpp</td><td>0</td><td><code>6cca4c39912525201b587daf7fbc11c6ad9eb5edf8ca079897d14e2ef27fdb9c</code></td><td><pre>report=/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/cpp-project/reports/report.json
+score=42
+</pre></td></tr><tr><td>python</td><td>0</td><td><code>9cac6221bd318bd4cf02bddae29e5533bb911b873e8169d28f503e41c17dc04e</code></td><td><pre>score=42 stages=8
+</pre></td></tr><tr><td>javascript</td><td>0</td><td><code>d3c8c8afc7613225d8b7bfebba0a61741f15192d09c34c4649815b2c4c9f859d</code></td><td><pre>{
+  &quot;score&quot;: 42,
+  &quot;report&quot;: &quot;/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/gr-sdk-demo.DctAxu/js-project/reports/report.json&quot;
+}
+</pre></td></tr><tr><td>rust</td><td>0</td><td><code>02640f62ca431003dfb95736a98186adc1d76f6723766743910ee29cdf987ad5</code></td><td><pre>report=/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/rust-project/reports/report.json score=Some(42)
+json={&quot;schema&quot;:1,&quot;score&quot;:42,&quot;stages&quot;</pre></td></tr></table>
+<p>Contract: validate CLI, spawn <code>run &lt;pe&gt; --project-dir &lt;dir&gt; --no-table --no-progress</code> without a shell, require exit 0 and a real <code>report.json</code>.</p>
+<p>Result: C, C++, Python, JavaScript/TypeScript and Rust all parsed the same report.</p></body></html>

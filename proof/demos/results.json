@@ -1,0 +1,47 @@
+{
+  "contract": "all bindings invoked the same fake CLI and parsed report.json",
+  "demos": [
+    {
+      "exit_code": 0,
+      "sdk": "c",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "report=/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/c-project/reports/report.json\n",
+      "stdout_sha256": "fc9a006b5a1b3860ba74cc0f2520806bdb813d3370a60c8fe74a2bdeb6409105"
+    },
+    {
+      "exit_code": 0,
+      "sdk": "cpp",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "report=/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/cpp-project/reports/report.json\nscore=42\n",
+      "stdout_sha256": "6cca4c39912525201b587daf7fbc11c6ad9eb5edf8ca079897d14e2ef27fdb9c"
+    },
+    {
+      "exit_code": 0,
+      "sdk": "python",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "score=42 stages=8\n",
+      "stdout_sha256": "9cac6221bd318bd4cf02bddae29e5533bb911b873e8169d28f503e41c17dc04e"
+    },
+    {
+      "exit_code": 0,
+      "sdk": "javascript",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "{\n  \"score\": 42,\n  \"report\": \"/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/gr-sdk-demo.DctAxu/js-project/reports/report.json\"\n}\n",
+      "stdout_sha256": "d3c8c8afc7613225d8b7bfebba0a61741f15192d09c34c4649815b2c4c9f859d"
+    },
+    {
+      "exit_code": 0,
+      "sdk": "rust",
+      "stderr": "blaze: starting the daemon (no socket activation is installed: `blaze daemon install` has the system start it on demand)\nnote: updated Cargo.lock: 1 package moved (commit it)\nnote:   Cargo.lock: ~ gamerecomp-sdk (/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/rust) 0.1.0 \u2192 0.3.0 (its manifest's version)\n   Compiling gamerecomp-sdk v0.3.0 (/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/rust)\nlink: /Users/haseeb-mir/.cache/blaze/build/rust-c3edca23cd13cca428392b30c046c64d/debug/build/gamerecomp-sdk/73a8f6cca2ab6db7/out/basic (first link)\nlink: /Users/haseeb-mir/.cache/blaze/build/rust-c3edca23cd13cca428392b30c046c64d/debug/examples/basic (first link)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 14s\nnote: this build took 1m 14s: `blaze slow` says what made it slow and what to fix\n     Running `/Users/haseeb-mir/.cache/blaze/build/rust-c3edca23cd13cca428392b30c046c64d/debug/build/gamerecomp-sdk/73a8f6cca2ab6db7/out/basic /private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-multi/demos/fake-cli.sh /var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/game.exe /var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/rust-project`\nversion query unavailable: CLI version query failed: `--version` exited with status exit status: 2\n",
+      "stderr_sha256": "a54836b9e8a5852ff0210214f27d7128599863c8abc4657cab5dff09d7bb2ba3",
+      "stdout": "report=/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T//gr-sdk-demo.DctAxu/rust-project/reports/report.json score=Some(42)\njson={\"schema\":1,\"score\":42,\"stages\":[\"inspect\",\"recover\",\"translate\",\"project\",\"compile\",\"run\",\"verify\",\"report\"]}\n",
+      "stdout_sha256": "02640f62ca431003dfb95736a98186adc1d76f6723766743910ee29cdf987ad5"
+    }
+  ],
+  "schema": 1,
+  "scope": "SDK plumbing proof only; no recompiler or gameplay claim"
+}
