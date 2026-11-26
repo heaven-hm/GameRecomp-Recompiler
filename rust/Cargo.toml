@@ -1,12 +1,12 @@
 [package]
 name = "gamerecomp-sdk"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.70"
 license = "AGPL-3.0-only"
 description = "Rust client SDK for the GameReComp PE32 x86 recompilation pipeline"
-repository = "https://github.com/heaven-hm/GameRecomp-Recompiler"
-homepage = "https://github.com/heaven-hm/GameRecomp-Recompiler"
+repository = "https://github.com/heaven-hm/GameRecomp-SDK"
+homepage = "https://github.com/heaven-hm/GameRecomp-SDK"
 documentation = "https://docs.rs/gamerecomp-sdk"
 keywords = ["recompiler", "pe32", "x86", "sdk", "gamerecomp"]
 categories = ["development-tools", "api-bindings"]
