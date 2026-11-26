@@ -1,0 +1,10 @@
+SPDX-License-Identifier: AGPL-3.0-only
+
+This project is licensed under the GNU Affero General Public License v3.0 only.
+Full text: https://www.gnu.org/licenses/agpl-3.0.txt
+
+It is a client SDK for GameReComp, which is also AGPL-3.0-only. No third-party
+recompiler source is copied into this repository.
+
+See NOTICE for upstream attribution and docs/LICENSE_INVENTORY.md for the
+licence inventory and verification results.

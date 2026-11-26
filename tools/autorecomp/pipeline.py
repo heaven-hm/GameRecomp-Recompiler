@@ -1,0 +1,1347 @@
+"""End-to-end pipeline: PE -> recovered functions -> C -> project -> binary -> run -> verify.
+
+Stages are deliberately small and fail closed. Every stage records its own
+status and evidence; a failure stops dependent stages, but the report stage
+still runs so the failure is inspectable.
+"""
+
+import contextlib
+from collections import Counter
+import hashlib
+import io
+import json
+import os
+import platform
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import traceback
+from datetime import datetime, timezone
+from pathlib import Path
+
+_TOOLS = Path(__file__).resolve().parents[1]
+_ROOT = _TOOLS.parent      # the repository root: highlevel/ lives beside tools/
+for _sub in ("pe", "disasm", "lift"):
+    _p = str(_TOOLS / _sub)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from pe_analyze import analyze_pe, build_iat_map  # noqa: E402
+from translator import (MAX_UNIT_BYTES, discover_functions,  # noqa: E402
+                        generate_recomp_files, make_read_va)
+
+from . import highlevel  # noqa: E402
+from . import projectgen  # noqa: E402
+
+STAGES = ["inspect", "recover", "translate", "project", "compile",
+          "run", "verify", "report"]
+
+STAGE_WEIGHTS = {
+    "inspect": 10, "recover": 10, "translate": 10, "project": 10,
+    "compile": 20, "run": 15, "verify": 15, "report": 10,
+}
+
+# A stalled compile used to hold the pipeline open indefinitely: GeneRally's
+# 402 MB translation (a single 273 MB unit, see translator.MAX_UNIT_BYTES) ran
+# for 30+ minutes with no sign of finishing. The deadline scales with generated
+# source size, can be overridden with --build-timeout, and 0 disables it.
+#
+# 5 s/MiB is calibrated from that same huge input after byte-capped units:
+# a GeneRally clean build of 375 MiB was at 56% when the old 1 s/MiB budget
+# (974 s) expired, i.e. roughly 4.6 s/MiB wall clock with --parallel 8. The
+# deadline is a safety net for pathological compiles, not a performance target,
+# so it errs above the measurement.
+BUILD_TIMEOUT_BASE = 600.0
+BUILD_TIMEOUT_PER_MB = 5.0
+BUILD_TIMEOUT_CAP = 3600.0
+
+
+def default_build_timeout(source_bytes):
+    return min(BUILD_TIMEOUT_CAP,
+               BUILD_TIMEOUT_BASE + BUILD_TIMEOUT_PER_MB * (source_bytes / (1 << 20)))
+
+CATEGORIES = ("HIGH_LEVEL_VERIFIED", "HIGH_LEVEL_UNVERIFIED",
+              "LOW_LEVEL_FALLBACK", "UNRESOLVED")
+
+# DLLs the runtime answers with shims. A DLL with one of these base names is
+# never lifted from disk even if a same-named file sits next to the game: the
+# shim is the answer, and re-lifting e.g. SDL.dll would compile the real SDL
+# against shims that already wrap the host's SDL2 -- two implementations of one
+# library, and the shimmed one is the tested path. This is the runtime's
+# registration list (host.c) plus the C++ runtimes, which are decisions (see
+# runtime/win32hle/README.md), not code to reconstruct.
+SHIMMED_DLLS = {
+    "kernel32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32",
+    "winmm", "wsock32", "ws2_32", "ddraw", "dsound", "dinput", "version",
+    "comctl32", "comdlg32", "ntdll", "msvcrt", "imm32", "mpr", "rpcrt4", "wininet",
+    "uuid", "dplayx", "d3dim", "avifil32", "msvfw32", "lz32", "d3d7", "d3d8",
+    "opengl32", "glu32", "winspool", "oledlg", "sdl", "sdl_mixer", "sdl12",
+    "bink", "mss", "smackw32", "msvcp140", "vcruntime140", "vcruntime140_1",
+    "ucrtbase", "api-ms-win-crt-runtime-l1-1-0",
+}
+
+
+def _dll_base_name(name):
+    """'bulletml.dll' / 'C:\\x\\bulletml.DLL' -> 'bulletml' (lower case)."""
+    import os
+    base = os.path.basename(str(name).replace("\\", "/")).lower()
+    return base[:-4] if base.endswith(".dll") else base
+
+
+def _find_companion_dlls(pe_path, info):
+    """Local, non-shimmed DLLs the executable imports and ships beside it.
+
+    A game that loads its own engine DLL (BulletML here) bundles that DLL next
+    to the exe. On Windows the loader maps it and the IAT points at its
+    exports. This pipeline reconstructs the *game*; a bundled DLL with no shim
+    is more code to reconstruct, not a system call to answer. Only a PE32 DLL
+    that exists beside the exe, exports functions, and is not one the runtime
+    already shims qualifies. Returned in import order, de-duplicated.
+    """
+    base_dir = Path(pe_path).resolve().parent
+    # A bundled DLL can itself bundle one (gconvapi.dll imports vqdll.dll,
+    # which ships beside it), so this is a breadth-first walk of the import
+    # graph, not one level: whatever interface a companion needs lifted must
+    # be lifted too, or its call binds to the unresolved stub and the whole
+    # image fails strict boot.
+    queue = list(info.import_dlls)
+    seen, out = set(), []
+    while queue:
+        dll = queue.pop(0)
+        base = _dll_base_name(dll)
+        if base in SHIMMED_DLLS or base in seen:
+            continue
+        seen.add(base)
+        # The file name as imported, matched case-insensitively on disk.
+        want = None
+        if base_dir.is_dir():
+            for p in base_dir.iterdir():
+                if p.is_file() and p.name.lower() == f"{base}.dll":
+                    want = p
+                    break
+        if not want:
+            continue
+        try:
+            cinfo = analyze_pe(str(want))
+        except Exception:
+            continue
+        if cinfo.pe_type != "PE32" or not cinfo.is_dll or not cinfo.exports:
+            continue
+        out.append({"name": dll, "path": want, "info": cinfo})
+        queue.extend(cinfo.import_dlls)
+    return out
+
+
+def _image_span(info):
+    """The span the loader reserves for an image at its base.
+
+    The runtime maps a PE at `round_up(SizeOfImage, PAGE)` (pe_loader.c), which
+    can be far larger than the code+data the analyzer walks: gconvapi.dll's
+    SizeOfImage is ~37 MB against a 0x44000 section span. Collision detection
+    must use the SAME number the loader reserves, or a companion is rebased onto
+    a base the runtime then finds occupied.
+    """
+    span = getattr(info, "size_of_image", 0) or 0
+    if span <= 0:
+        span = max((info.code_end - info.image_base) + 0x100000, 0x100000)
+    return (span + 0xFFF) & ~0xFFF
+
+
+def _rebase_companion(comp, occupied, dest_dir):
+    """Give a colliding companion a free base by rewriting its relocations.
+
+    Returns (new_path, new_info) or (None, reason). The rebased copy lives in
+    the project, never next to the user's file: the game data stays where the
+    user put it. The copy is analysed afresh so the lifted code targets the new
+    base.
+    """
+    from pe_rebase import RebaseError, pick_base, rebase_pe  # noqa: PLC0415
+    ci = comp["info"]
+    span = _image_span(ci)
+    try:
+        new_base = pick_base(ci.image_base, span, occupied)
+        data = rebase_pe(comp["path"].read_bytes(), new_base)
+    except RebaseError as exc:
+        return None, f"cannot rebase: {exc}"
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out_path = dest_dir / Path(comp["name"]).name
+    out_path.write_bytes(data)
+    try:
+        new_info = analyze_pe(str(out_path))
+    except Exception as exc:                      # malformed rebased copy
+        return None, f"rebased copy unreadable: {exc}"
+    return out_path, new_info
+
+
+def _now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _tail(path, lines=80):
+    try:
+        text = Path(path).read_text(errors="replace").splitlines()
+    except OSError:
+        return ""
+    return "\n".join(text[-lines:])
+
+
+def _source_files(project_dir):
+    """Every file delivered under src/, sorted, with content hashes."""
+    files = []
+    for base in ("src",):
+        for path in sorted((project_dir / base).rglob("*")):
+            if path.is_file():
+                files.append({
+                    "path": str(path.relative_to(project_dir)),
+                    "sha256": _sha256_file(path),
+                    "size": path.stat().st_size,
+                })
+    return files
+
+
+def _source_digest(files):
+    return hashlib.sha256(
+        "".join(f"{f['sha256']}  {f['path']}\n" for f in files).encode()).hexdigest()
+
+
+class StageFailure(Exception):
+    def __init__(self, message, data=None):
+        super().__init__(message)
+        self.data = data or {}
+
+
+class Pipeline:
+    def __init__(self, pe_path, project_dir=None, assets_dir=None,
+                 timeout=30.0, headless=True, oracle=None, jobs=None,
+                 split=1000, build=True, run_binary=True, on_event=None,
+                 split_bytes=MAX_UNIT_BYTES, build_timeout=None,
+                 reuse_build=False, fresh_build=False, import_trace=False,
+                 highlevel_dir=None, target=None):
+        self.pe_path = Path(pe_path).expanduser().resolve()
+        self.project_dir = Path(project_dir or projectgen.default_project_dir(self.pe_path)).resolve()
+        self.assets_dir = Path(assets_dir).expanduser().resolve() if assets_dir else self.pe_path.parent
+        self.timeout = timeout
+        self.headless = headless
+        self.oracle_path = Path(oracle).expanduser().resolve() if oracle else None
+        self.jobs = jobs
+        self.split = split
+        self.split_bytes = split_bytes
+        self.build_timeout = build_timeout
+        self.do_build = build
+        self.do_run = run_binary
+        self.reuse_build = reuse_build
+        self.fresh_build = fresh_build
+        self.import_trace = import_trace
+        self.target = target
+        # Where the typed replacements live. None means the default
+        # highlevel/ directory, which is empty in a fresh checkout.
+        self.highlevel_dir = highlevel_dir
+        self.highlevel_modules = []
+        self.highlevel_skipped = []
+        self.highlevel_by_address = {}
+        self.on_event = on_event
+
+        self.info = None
+        self.pe_data = None
+        self.iat_map = {}
+        self.functions = {}
+        self.lifted = []
+        self.unresolved_functions = 0
+        self.name = None
+        self.binary = None
+        self.stages = []
+        self.stage_status = {}
+        self.run_result = None
+        self.verification = None
+        self.manifest = None
+
+    # ------------------------------------------------------------------
+    # events / stage bookkeeping
+
+    def _emit(self, **evt):
+        if self.on_event:
+            try:
+                self.on_event(evt)
+            except Exception:
+                pass
+
+    def _stage(self, name):
+        return _StageRun(self, name)
+
+    # ------------------------------------------------------------------
+    # stages
+
+    def stage_inspect(self):
+        if not self.pe_path.is_file():
+            raise StageFailure(f"input executable not found: {self.pe_path}",
+                               {"path": str(self.pe_path)})
+        info = analyze_pe(str(self.pe_path), do_hashes=True)
+        if info.pe_type != "PE32":
+            raise StageFailure(
+                f"{info.pe_type} is not supported by the PE32 backend yet "
+                f"(machine {info.machine}); fail-closed instead of guessing",
+                {"pe_type": info.pe_type, "machine": info.machine})
+        self.info = info
+        self.pe_data = self.pe_path.read_bytes()
+        self.iat_map = build_iat_map(info)
+        self.name = projectgen.executable_name(self.pe_path)
+
+        # Bundled (non-shimmed) DLLs the game imports. Their functions are code
+        # the game runs, so they are reconstructed too: recovered into the same
+        # dispatch table, and mapped at their preferred base at runtime. A DLL
+        # whose preferred base collides with the main image (or an earlier
+        # companion) is rebased onto a free base here, exactly as the Windows
+        # loader would relocate it, and the copy is what gets lifted.
+        self.companions = []
+        used = [(info.image_base, info.image_base + _image_span(info))]
+        for comp in _find_companion_dlls(self.pe_path, info):
+            ci = comp["info"]
+            lo = ci.image_base
+            hi = lo + _image_span(ci)
+            if any(lo < u_hi and hi > u_lo for u_lo, u_hi in used):
+                # Preferred base collides with the game (or an earlier
+                # companion). Windows would relocate it; do the same once, here,
+                # and lift the rebased copy at its new base.
+                new_path, new_info = _rebase_companion(
+                    comp, used, self.project_dir / "_companions")
+                if new_path is None:
+                    comp["skipped"] = new_info
+                    continue
+                comp["path"] = new_path
+                comp["info"] = new_info
+                comp["rebased_from"] = ci.image_base
+                ci = new_info
+                lo = ci.image_base
+                hi = lo + _image_span(ci)
+            used.append((lo, hi))
+            self.companions.append(comp)
+
+        data = {
+            "path": str(self.pe_path),
+            "size": info.filesize,
+            "sha256": _sha256_file(self.pe_path),
+            "md5": info.md5,
+            "sha1": info.sha1,
+            "machine": info.machine,
+            "pe_type": info.pe_type,
+            "subsystem": info.subsystem,
+            "image_base": f"0x{info.image_base:08X}",
+            "entry_point": f"0x{info.image_base + info.entry_point_rva:08X}",
+            "linker_version": info.linker_version,
+            "code_range": [f"0x{info.code_start:08X}", f"0x{info.code_end:08X}"],
+            "import_dlls": list(info.import_dlls),
+            "import_count": len(info.imports),
+            "iat_entries": len(self.iat_map),
+        }
+        self._write_json("reports/inspect.json", data)
+        return f"{info.machine} {info.pe_type}, {len(info.imports)} imports, entry {data['entry_point']}", data
+
+    def stage_recover(self):
+        # The disassembler narrates its recovery on stdout. Capture that
+        # narration into logs/recover.log like the translate stage does, so
+        # a `--json` run's stdout stays machine-readable and the chatter
+        # stays inspectable.
+        log_path = self.project_dir / "logs" / "recover.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            functions = discover_functions(self.pe_data, self.info,
+                                           self.iat_map)
+            # Bundled DLLs are reconstructed into the same table. Their VAs are
+            # distinct from the exe's (the collision check in stage_inspect saw
+            # to that), so a plain merge is safe; merging their IAT maps lets
+            # their own imports resolve through the same lifter.
+            for comp in self.companions:
+                dll_data = comp["path"].read_bytes()
+                dll_iat = build_iat_map(comp["info"])
+                dll_fns = discover_functions(dll_data, comp["info"], dll_iat)
+                for addr, fn in dll_fns.items():
+                    functions.setdefault(addr, fn)
+                self.iat_map.update(dll_iat)
+                comp["function_count"] = len(dll_fns)
+        log_path.write_text(buf.getvalue())
+        self.functions = functions
+        ordered = sorted(functions.values(), key=lambda f: f.address)
+        entries = []
+        for i, func in enumerate(ordered):
+            entries.append({
+                "address": f"0x{func.address:08X}",
+                "name": func.name,
+                "size": func.size,
+                "blocks": len(func.blocks),
+                "instructions": func.num_instructions,
+                "is_thunk": bool(func.is_thunk),
+                "calls": len(func.calls_to),
+                "source_unit": f"src/recomp/gen/recomp_{i // self.split:04d}.c",
+                "category": "LOW_LEVEL_FALLBACK",
+            })
+        data = {
+            "count": len(entries),
+            "thunks": sum(1 for e in entries if e["is_thunk"]),
+            "instructions": sum(e["instructions"] for e in entries),
+            "functions": entries,
+        }
+        self._write_json("reports/functions.json", data)
+        return f"{len(entries)} functions, {data['instructions']} instructions", {"count": len(entries), "instructions": data["instructions"]}
+
+    def stage_translate(self):
+        gen_dir = self.project_dir / "src" / "recomp" / "gen"
+        # Re-translation must not leave stale units behind: the dispatch table
+        # and recomp_funcs.h are regenerated together, but an old recomp_0007.c
+        # from a previous, larger run would still be compiled by the GLOB.
+        if gen_dir.exists():
+            shutil.rmtree(gen_dir)
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        log_path = self.project_dir / "logs" / "translate.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        buf = io.StringIO()
+        t0 = time.time()
+        # Typed replacements for individual addresses. Loaded before the
+        # mechanical bodies so a replaced function's body is emitted under its
+        # __lowlevel name and the dispatch table points at the adapter.
+        root = Path(self.highlevel_dir) if self.highlevel_dir else (_ROOT / "highlevel")
+        # Only modules written for THIS binary. A module names original
+        # addresses, and addresses are not portable between executables: the
+        # synthetic fixture's entry point is 0x00401000, which is Ikachan's
+        # global initialiser, so applying Ikachan's module to the fixture
+        # replaced its entry point with a function that writes to memory the
+        # fixture does not have. Matching by address alone is not enough.
+        sha = _sha256_file(self.pe_path)
+        entry = self.info.image_base + self.info.entry_point_rva
+        self.highlevel_modules, self.highlevel_skipped = highlevel.select_modules(
+            root, sha, entry)
+        self.highlevel_by_address = {
+            fn["address"]: dict(fn, module=m["name"])
+            for m in self.highlevel_modules for fn in m["functions"]
+        }
+        replaced = [a for a in self.highlevel_by_address if a in self.functions]
+        readers = [make_read_va(self.pe_data, self.info)]
+        for comp in self.companions:
+            readers.append(make_read_va(comp["path"].read_bytes(), comp["info"]))
+
+        def combined_read_va(va, n):
+            for r in readers:
+                data = r(va, n)
+                if data:
+                    return data
+            return b""
+
+        with contextlib.redirect_stdout(buf):
+            lifted = generate_recomp_files(
+                self.functions, self.iat_map, str(gen_dir),
+                split_size=self.split, max_unit_bytes=self.split_bytes,
+                highlevel={a: self.highlevel_by_address[a] for a in replaced},
+                read_va=combined_read_va)
+        log_path.write_text(buf.getvalue())
+        self.lifted = lifted
+
+        # stage_recover guesses the unit from the function count; by-size
+        # chunking makes that guess wrong, so use the generator's own manifest.
+        unit_ranges = []
+        units_manifest = gen_dir / "recomp_units.json"
+        if units_manifest.exists():
+            for unit in json.loads(units_manifest.read_text()).get("units", []):
+                unit_ranges.append((int(unit["first_address"], 16),
+                                    int(unit["last_address"], 16),
+                                    f"src/recomp/gen/{unit['file']}"))
+
+        errors = 0
+        failed_names = set()
+        for path in sorted(gen_dir.glob("recomp_*.c")):
+            text = path.read_text(errors="replace")
+            errors += text.count("/* ERROR lifting")
+            failed_names.update(re.findall(r"/\* ERROR lifting (\w+):", text))
+        self.unresolved_functions = errors
+
+        by_addr = {f"0x{a:08X}": name for a, name in lifted}
+        func_path = self.project_dir / "reports" / "functions.json"
+        if func_path.exists():
+            data = json.loads(func_path.read_text())
+            for entry in data["functions"]:
+                if entry["address"] in by_addr:
+                    entry["name"] = by_addr[entry["address"]]
+                if entry["name"] in failed_names:
+                    entry["category"] = "UNRESOLVED"
+                if unit_ranges:
+                    try:
+                        addr = int(entry["address"], 16)
+                    except (KeyError, ValueError):
+                        continue
+                    for first, last, rel in unit_ranges:
+                        if first <= addr <= last:
+                            entry["source_unit"] = rel
+                            break
+            data["lift_errors"] = errors
+            func_path.write_text(json.dumps(data, indent=2) + "\n")
+
+        units = sorted(gen_dir.glob("*.c"))
+        total_bytes = sum(p.stat().st_size for p in units)
+        data = {
+            "source_units": len(units),
+            "source_bytes": total_bytes,
+            "lift_errors": errors,
+            "seconds": round(time.time() - t0, 1),
+        }
+        if errors:
+            data["warning"] = (f"{errors} function(s) failed to lift; they are "
+                               f"emitted as UNRESOLVED stubs that abort when called")
+        return f"{len(units)} source files, {total_bytes} bytes, {errors} lift errors", data
+
+    def _write_companion_table(self):
+        """Emit recomp_companions.c + recomp_companion_images.S.
+
+        Each bundled DLL's bytes are embedded in the rebuilt binary (a .bin per
+        DLL, compiled through .incbin) so no DLL file is needed at run time --
+        the rebuilt binary is self-contained. The runtime maps each embedded
+        image at its preferred base at boot and answers the main image's IAT
+        slots for its exports with the export VA (also the lifted function's
+        VA, since the DLL was lifted at that base).
+        """
+        if not self.companions:
+            return
+        gen = self.project_dir / "src" / "recomp" / "gen"
+        gen.mkdir(parents=True, exist_ok=True)
+
+        # Bytes: the rebased copy when there is one (that is what the lifted
+        # code targets), else the game's own DLL.
+        asm = ["/* Generated: bundled DLL images, embedded so the rebuilt binary",
+               " * needs no DLL files at run time. */",
+               "#if defined(__APPLE__)",
+               "#define SYM(x) _##x",
+               "    .section __DATA,__const",
+               "#else",
+               "#define SYM(x) x",
+               "    .section .rodata",
+               "#endif", ""]
+        sizes = {}
+        for i, comp in enumerate(self.companions):
+            data = Path(comp["path"]).read_bytes()
+            blob = gen / f"recomp_companion_{i}.bin"
+            blob.write_bytes(data)
+            sizes[i] = len(data)
+            asm.append("    .p2align 4")
+            asm.append(f"    .globl SYM(recomp_companion_image_{i})")
+            asm.append(f"SYM(recomp_companion_image_{i}):")
+            asm.append(f'    .incbin "{blob.resolve()}"')
+        asm.append("")
+        (gen / "recomp_companion_images.S").write_text("\n".join(asm))
+
+        lines = ['/* Generated: bundled (non-system) DLLs the game imports. */',
+                 '#include "win32hle.h"', '']
+        for i, comp in enumerate(self.companions):
+            ci = comp["info"]
+            lines.append(f"extern const unsigned char recomp_companion_image_{i}[];")
+            lines.append(f"static const uint32_t recomp_companion_size_{i} = {sizes[i]}UL;")
+            lines.append(f"static const recomp_export_t recomp_exports_{i}[] = {{")
+            seen = set()
+            for e in ci.exports:
+                if not e.name or not e.rva or e.name in seen:
+                    continue
+                seen.add(e.name)
+                va = ci.image_base + e.rva
+                esc = e.name.replace('\\', '\\\\').replace('"', '\\"')
+                lines.append(f'    {{ "{esc}", 0x{va:08X}u }},')
+            lines.append("};")
+        lines.append("")
+        lines.append("const recomp_companion_t recomp_companion_array[] = {")
+        for i, comp in enumerate(self.companions):
+            ci = comp["info"]
+            name = comp["name"].replace('\\', '\\\\').replace('"', '\\"')
+            lines.append(f'    {{ "{name}", 0x{ci.image_base:08X}u, NULL, '
+                         f'recomp_companion_image_{i}, recomp_companion_size_{i}, '
+                         f'recomp_exports_{i}, '
+                         f'(uint32_t)(sizeof recomp_exports_{i} / sizeof recomp_exports_{i}[0]) }},')
+        lines.append("};")
+        lines.append(f"const uint32_t recomp_companion_count = "
+                     f"{len(self.companions)};")
+        lines.append("const recomp_companion_t *const recomp_companion_list = "
+                     "recomp_companion_array;")
+        lines.append("")
+        (gen / "recomp_companions.c").write_text("\n".join(lines))
+
+    def stage_project(self):
+        pe_info = {
+            "path": str(self.pe_path),
+            "sha256": _sha256_file(self.pe_path),
+            "machine": self.info.machine,
+            "pe_type": self.info.pe_type,
+            "image_base": f"0x{self.info.image_base:08X}",
+            "entry_point": f"0x{self.info.image_base + self.info.entry_point_rva:08X}",
+        }
+        unresolved = self.unresolved_functions
+        total = len(self.functions)
+        # Counted from the replacements that were actually applied to this
+        # build, never from what a module claims in the abstract: a module
+        # naming an address this binary does not have changes nothing.
+        applied = {a: f for a, f in self.highlevel_by_address.items()
+                   if a in self.functions}
+        categories = {
+            "HIGH_LEVEL_VERIFIED": sum(1 for f in applied.values()
+                                       if f["category"] == "HIGH_LEVEL_VERIFIED"),
+            "HIGH_LEVEL_UNVERIFIED": sum(1 for f in applied.values()
+                                         if f["category"] == "HIGH_LEVEL_UNVERIFIED"),
+            "LOW_LEVEL_FALLBACK": max(0, total - unresolved - len(applied)),
+            "UNRESOLVED": unresolved,
+        }
+        high_level_report = [{
+            "address": f"0x{f['address']:08X}",
+            "symbol": f["symbol"],
+            "module": f.get("module"),
+            "category": f["category"],
+            "convention": f["convention"],
+            "provenance": f["provenance"],
+        } for f in sorted(applied.values(), key=lambda f: f["address"])]
+        record = projectgen.write_project(
+            self.project_dir, self.name, self.pe_path.name, pe_info,
+            highlevel_modules=self.highlevel_modules,
+            embed_image=self.pe_path,
+            extra={"functions": total, "source_categories": categories,
+                   "high_level_functions": high_level_report})
+        self._write_companion_table()
+        data = {
+            "project": str(self.project_dir),
+            "name": self.name,
+            "source_categories": categories,
+            "high_level_functions": high_level_report,
+            "highlevel_modules_skipped": self.highlevel_skipped,
+            "runtime_files": len(record["runtime_files"]),
+            "highlevel_files": len(record.get("highlevel_files") or []),
+        }
+        return f"project at {self.project_dir}", data
+
+    def stage_compile(self):
+        if not self.do_build:
+            return "build skipped (--no-build)", {"skipped": True}
+        build_dir = self.project_dir / "build"
+        # A cached CMakeCache.txt pins absolute paths from whatever was
+        # installed when it was written. Homebrew moving a keg (ffmpeg 9.0.2
+        # was deleted out from under a configured tree) then fails the
+        # generate step with a non-existent include path, which looks like a
+        # source error and is not. --fresh-build discards the cache and lets
+        # cmake re-derive every path from pkg-config.
+        if self.fresh_build and build_dir.exists():
+            shutil.rmtree(build_dir)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        log_path = self.project_dir / "logs" / "compile.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        source_files = _source_files(self.project_dir)
+        source_digest = _source_digest(source_files)
+        source_bytes = sum(f["size"] for f in source_files)
+
+        if self.target == ("web", "wasm32"):
+            return self._compile_wasm(build_dir, source_digest, source_bytes, log_path)
+
+        binary = build_dir / self.name
+        if os.name == "nt":
+            binary = binary.with_suffix(".exe")
+
+        if self.reuse_build:
+            self.binary = self._adopt_reused_binary(binary, source_digest, log_path)
+            return f"{binary} ({binary.stat().st_size} bytes, reused build)", {
+                "binary": str(binary),
+                "sha256": _sha256_file(binary),
+                "seconds": 0.0,
+                "source_bytes": source_bytes,
+                "reused": True,
+                "reused_source_digest": source_digest,
+            }
+
+        cmake = shutil.which("cmake")
+        if not cmake:
+            raise StageFailure("cmake not found on PATH")
+        configure = [cmake, "-S", str(self.project_dir), "-B", str(build_dir),
+                     "-DCMAKE_BUILD_TYPE=Release"]
+        build = [cmake, "--build", str(build_dir), "--parallel",
+                 str(self.jobs or os.cpu_count() or 4)]
+
+        adaptive = self.build_timeout is None
+        timeout = (default_build_timeout(source_bytes)
+                   if adaptive else float(self.build_timeout))
+        deadline = (time.monotonic() + timeout) if timeout > 0 else None
+        deadline_data = {"log": str(log_path), "timed_out": True,
+                         "timeout_seconds": timeout, "adaptive": adaptive,
+                         "source_bytes": source_bytes}
+
+        t0 = time.time()
+        with open(log_path, "w") as log:
+            log.write("$ " + " ".join(configure) + "\n")
+            rc, timed_out = self._run_build_command(configure, log, deadline)
+            if timed_out:
+                raise StageFailure(
+                    f"cmake configure exceeded the {timeout:g}s build deadline "
+                    f"(see {log_path})", deadline_data)
+            if rc == 0:
+                log.write("\n$ " + " ".join(build) + "\n")
+                rc, timed_out = self._run_build_command(build, log, deadline)
+            if timed_out:
+                raise StageFailure(
+                    f"build exceeded the {timeout:g}s deadline (see {log_path}); "
+                    f"the deadline scales with generated source size and can be "
+                    f"raised or disabled with --build-timeout", deadline_data)
+        seconds = round(time.time() - t0, 1)
+        if rc != 0:
+            raise StageFailure(
+                f"build failed (see {log_path})\n{_tail(log_path)}",
+                {"log": str(log_path), "returncode": rc, "seconds": seconds})
+        if not binary.exists():
+            raise StageFailure(f"build reported success but {binary} is missing",
+                               {"log": str(log_path)})
+        self.binary = binary
+        return f"{binary} ({binary.stat().st_size} bytes, {seconds}s)", {
+            "binary": str(binary),
+            "sha256": _sha256_file(binary),
+            "seconds": seconds,
+            "source_bytes": source_bytes,
+            "build_timeout_seconds": timeout or None,
+            "build_timeout_adaptive": adaptive,
+        }
+
+    def _compile_wasm(self, build_dir, source_digest, source_bytes, log_path):
+        import concurrent.futures
+
+        wasm_path = build_dir / f"{self.name}.wasm"
+        if self.reuse_build:
+            self.binary = self._adopt_reused_binary(wasm_path, source_digest, log_path)
+            return f"{wasm_path} ({wasm_path.stat().st_size} bytes, reused build)", {
+                "binary": str(wasm_path),
+                "sha256": _sha256_file(wasm_path),
+                "seconds": 0.0,
+                "source_bytes": source_bytes,
+                "reused": True,
+                "reused_source_digest": source_digest,
+            }
+
+        env = dict(os.environ)
+        for z3_dir in sorted(Path("/opt/homebrew/Cellar/z3").glob("*/lib")):
+            if (z3_dir / "libz3.5.1.dylib").exists():
+                prev = env.get("DYLD_LIBRARY_PATH", "")
+                env["DYLD_LIBRARY_PATH"] = f"{z3_dir}:{prev}" if prev else str(z3_dir)
+                break
+
+        clang = None
+        for cand in ("/opt/homebrew/opt/llvm/bin/clang", shutil.which("clang")):
+            if cand and Path(cand).exists():
+                probe = subprocess.run([cand, "--print-targets"], env=env,
+                                       capture_output=True, text=True)
+                if probe.returncode == 0 and "wasm32" in probe.stdout:
+                    clang = cand
+                    break
+        if not clang:
+            raise StageFailure("clang with wasm32 target support not found")
+
+        wasm_ld_candidates = [shutil.which("wasm-ld")]
+        wasm_ld_candidates.extend(
+            str(p) for p in Path.home().glob(".rustup/toolchains/*/lib/rustlib/*/bin/gcc-ld/wasm-ld"))
+        wasm_ld_candidates.append("/opt/homebrew/opt/lld/bin/wasm-ld")
+        wasm_ld = next((c for c in wasm_ld_candidates if c and Path(c).exists()), None)
+        if not wasm_ld:
+            raise StageFailure("wasm-ld not found on PATH or rustup toolchain")
+
+        obj_dir = build_dir / "obj"
+        obj_dir.mkdir(parents=True, exist_ok=True)
+        gen_dir = self.project_dir / "src" / "recomp" / "gen"
+
+        # Emit C arrays for embedded PE + companion DLL images (replaces ELF/Mach-O .S/.incbin)
+        def write_byte_array_c(out_c, header_lines, arrays):
+            lines = list(header_lines)
+            for sym, raw in arrays:
+                lines.append(f"const unsigned char {sym}[] = {{")
+                for off in range(0, len(raw), 16):
+                    lines.append("  " + ",".join(f"0x{b:02x}" for b in raw[off:off + 16]) + ",")
+                lines.append("};")
+            out_c.write_text("\n".join(lines) + "\n")
+
+        pe_bytes = (gen_dir / "recomp_image.bin").read_bytes()
+        safe_exe = self.pe_path.name.replace("\\", "\\\\").replace('"', '\\"')
+        img_c = build_dir / "recomp_image_wasm.c"
+        write_byte_array_c(
+            img_c,
+            [
+                "const int recomp_has_embedded_image = 1;",
+                f"const unsigned long recomp_original_image_size = {len(pe_bytes)}UL;",
+                f'const char recomp_original_name[] = "{safe_exe}";',
+            ],
+            [("recomp_embedded_image", pe_bytes)],
+        )
+
+        sources = []
+        for p in sorted(gen_dir.glob("recomp_*.c")):
+            if p.name != "recomp_image.c":
+                sources.append(p)
+        sources.append(img_c)
+
+        if self.companions:
+            comp_img_c = build_dir / "recomp_companion_images_wasm.c"
+            arrays = []
+            for i in range(len(self.companions)):
+                cblob = gen_dir / f"recomp_companion_{i}.bin"
+                if cblob.is_file():
+                    arrays.append((f"recomp_companion_image_{i}", cblob.read_bytes()))
+            if arrays:
+                write_byte_array_c(comp_img_c, ["/* companion images */"], arrays)
+                sources.append(comp_img_c)
+
+        hl_dir = self.project_dir / "src" / "highlevel"
+        if hl_dir.is_dir():
+            sources.extend(sorted(hl_dir.glob("*.c")))
+
+        wasm_rt = _ROOT / "runtime" / "wasm32"
+        sources.extend(sorted(wasm_rt.glob("*.c")))
+
+        cflags = [
+            clang, "--target=wasm32-unknown-unknown", "-nostdinc",
+            "-isystem", str(wasm_rt / "include"),
+            "-I", str(_ROOT / "runtime" / "recomp32"),
+            "-I", str(wasm_rt / "include"),
+            "-I", str(gen_dir),
+            "-I", str(hl_dir),
+            "-O2", "-w",
+        ]
+
+        t0 = time.time()
+        objs = [obj_dir / f"{s.stem}.o" for s in sources]
+        errors = []
+        jobs = int(self.jobs or os.cpu_count() or 4)
+
+        def compile_one(pair):
+            src, obj = pair
+            cmd = [*cflags, "-c", str(src), "-o", str(obj)]
+            res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            if res.returncode != 0:
+                return f"$ {' '.join(cmd)}\n{res.stderr or res.stdout}"
+            return None
+
+        with open(log_path, "w") as log:
+            log.write(f"# wasm32 compile: {len(sources)} units -> {wasm_path}\n")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                for err in pool.map(compile_one, zip(sources, objs)):
+                    if err:
+                        errors.append(err)
+                        log.write(err + "\n")
+            if errors:
+                raise StageFailure(
+                    f"wasm32 compile failed (see {log_path})\n{_tail(log_path)}",
+                    {"log": str(log_path), "returncode": 1})
+            link_cmd = [
+                wasm_ld, "--no-entry",
+                "--initial-memory=67108864", "--max-memory=536870912",
+                "-z", "stack-size=2097152",
+                *[str(o) for o in objs], "-o", str(wasm_path),
+            ]
+            log.write("$ " + " ".join(link_cmd) + "\n")
+            lres = subprocess.run(link_cmd, env=env, capture_output=True, text=True)
+            log.write(lres.stdout or "")
+            log.write(lres.stderr or "")
+            if lres.returncode != 0:
+                raise StageFailure(
+                    f"wasm-ld link failed (see {log_path})\n{_tail(log_path)}",
+                    {"log": str(log_path), "returncode": lres.returncode})
+
+        shutil.copyfile(wasm_rt / "run_wasm_node.mjs", build_dir / "run_wasm_node.mjs")
+        html = (wasm_rt / "index.html").read_text()
+        html = html.replace("@TITLE@", self.name).replace("@WASM_FILE@", wasm_path.name)
+        (build_dir / "index.html").write_text(html)
+
+        seconds = round(time.time() - t0, 1)
+        if not wasm_path.exists():
+            raise StageFailure(f"wasm32 build reported success but {wasm_path} is missing",
+                               {"log": str(log_path)})
+        self.binary = wasm_path
+        return f"{wasm_path} ({wasm_path.stat().st_size} bytes, {seconds}s)", {
+            "binary": str(wasm_path),
+            "sha256": _sha256_file(wasm_path),
+            "seconds": seconds,
+            "source_bytes": source_bytes,
+            "target": "web/wasm32",
+            "web_entry": str(build_dir / "index.html"),
+        }
+
+    def _adopt_reused_binary(self, binary, source_digest, log_path):
+        """Adopt an existing binary only when it provably came from this source.
+
+        --reuse-build exists so re-verification does not pay the compile cost
+        again, but the delivered binary must still be the one built from
+        exactly the generated source; any mismatch is a hard failure.
+        """
+        manifest_path = self.project_dir / "manifest.json"
+        if not binary.exists():
+            raise StageFailure(
+                f"--reuse-build: {binary} is missing; run a build first",
+                {"log": str(log_path)})
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except (OSError, ValueError):
+            raise StageFailure(
+                f"--reuse-build: no readable {manifest_path}; run a build first",
+                {"log": str(log_path)})
+        built_from = (manifest.get("binary") or {}).get("built_from_source_digest")
+        if not built_from:
+            raise StageFailure(
+                f"--reuse-build: {manifest_path} does not record which source "
+                f"the binary was built from", {"log": str(log_path)})
+        if built_from != source_digest:
+            raise StageFailure(
+                f"--reuse-build: {binary} was built from source digest "
+                f"{built_from[:12]} but the current generated source is "
+                f"{source_digest[:12]}; the source changed since that build",
+                {"log": str(log_path), "manifest_digest": built_from,
+                 "source_digest": source_digest})
+        log_path.write_text(
+            f"$ reuse {binary}\n"
+            f"# adopted existing binary; manifest built_from_source_digest "
+            f"{source_digest} matches the current src/ tree\n")
+        return binary
+
+    def _run_build_command(self, cmd, log, deadline):
+        """Run a build command under one shared deadline.
+
+        subprocess.run(timeout=...) kills only the direct child; cmake leaves
+        compiler processes behind. The build gets its own session so the whole
+        group can be killed when the deadline expires.
+        """
+        timeout = None if deadline is None else max(1.0, deadline - time.monotonic())
+        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT,
+                                start_new_session=(os.name != "nt"))
+        try:
+            return proc.wait(timeout=timeout), False
+        except subprocess.TimeoutExpired:
+            if os.name != "nt":
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except OSError:
+                    proc.kill()
+            else:
+                proc.kill()
+            proc.wait()
+            return None, True
+
+    def stage_run(self):
+        if not self.binary:
+            return "run skipped (no binary)", {"skipped": True}
+        if not self.do_run:
+            return "run skipped (--no-run)", {"skipped": True}
+
+        log_dir = self.project_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        stdout_path = log_dir / "run.stdout.log"
+        stderr_path = log_dir / "run.stderr.log"
+        env = dict(os.environ)
+        if self.headless:
+            env["SDL_VIDEODRIVER"] = "dummy"
+            env["SDL_AUDIODRIVER"] = "dummy"
+        # RECOMP_TRACE makes the runtime log every import it dispatches. That
+        # log is the difference between "the process stayed alive" and "the
+        # process ran a game loop": a loop of Blt/PeekMessage/GetDeviceState/
+        # Sleep is evidence, a spin is not. Kept as an explicit option because
+        # it is large and it slows the run down.
+        if self.import_trace:
+            env["RECOMP_TRACE"] = "1"
+        # The image is embedded in the rebuilt binary, so it no longer takes the
+        # original executable as an argument; the working directory is where
+        # the game's own data files are found.
+        if self.binary.suffix == ".wasm":
+            node = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
+            if not node or not Path(node).exists():
+                raise StageFailure("node executable not found for wasm32 run stage")
+            cmd = [node, str(self.binary.parent / "run_wasm_node.mjs"), str(self.binary)]
+        else:
+            cmd = [str(self.binary)]
+        t0 = time.time()
+        status, rc, timed_out = "exited", None, False
+        with open(stdout_path, "w") as out, open(stderr_path, "w") as err:
+            proc = subprocess.Popen(
+                cmd, cwd=str(self.assets_dir), env=env,
+                stdout=out, stderr=err,
+                # Keep the game in the orchestrator's process group so GUI
+                # cancellation stops both the pipeline and the running game.
+                stdin=subprocess.DEVNULL, start_new_session=False)
+            try:
+                rc = proc.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                status = "timeout"
+                if os.name != "nt":
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except OSError:
+                        proc.kill()
+                else:
+                    proc.kill()
+                proc.wait()
+        seconds = round(time.time() - t0, 1)
+        stdout = _tail(stdout_path, 200)
+        stderr = _tail(stderr_path, 200)
+        output = "\n".join(part for part in (stdout, stderr) if part)
+        # The loader's own lines are at the TOP of the log, and a process that
+        # runs until the deadline writes far more than 200 lines after them --
+        # so reading only the tail reported a running game's import counts as
+        # unknown. Scan the whole stderr for them; keep the tail for the
+        # human-facing output_tail.
+        boot_output = _tail(stderr_path, 10 ** 9)
+        if not timed_out:
+            if rc is not None and rc < 0:
+                status = "crashed"
+            elif rc == 2 and re.search(r"\[pe\] bound \d+ imports, [1-9]\d* unresolved", boot_output):
+                # A boot failure leaves the loader's own line naming unresolved
+                # imports. The exit status alone is not enough: a guest can
+                # exit 2 itself (rrootage does, after SDL refuses an OpenGL
+                # screen), and that is a *run*, not a boot the loader refused.
+                status = "boot-failed"
+            elif rc == 3 and re.search(
+                    r"guest exceptions are not handled|no guest SEH|"
+                    r"no guest unwind support|_CxxThrowException|"
+                    r"std::terminate called|invalid parameter passed",
+                    boot_output):
+                # The guest raised a C++ exception this layer cannot unwind
+                # (RaiseException/_CxxThrowException/_except_handler4_common),
+                # so the *runtime* ended the process with hle_exit(3). That is
+                # not the guest exiting on its own: counting it as a clean exit
+                # would be a fake pass. Half credit, the same as a fault.
+                status = "aborted"
+            else:
+                status = "exited"
+
+        unresolved = sorted(set(re.findall(r"\[pe\] unresolved import (\S+)", boot_output)))
+        # The import-call profile of the run, most-called first: the artifact a
+        # verification report can carry to show what the process actually did.
+        calls = Counter(re.findall(r"^\[hle\] ([A-Za-z_][\w:]*)$", boot_output, re.M))
+        import_profile = [{"import": name, "calls": n}
+                          for name, n in calls.most_common(40)]
+        boot_m = re.search(r"\[host\] .* booted: entry 0x([0-9A-Fa-f]+), (\d+) unresolved imports", boot_output)
+        bound_m = re.search(r"\[pe\] bound (\d+) imports, (\d+) unresolved", boot_output)
+        result = {
+            "command": cmd,
+            "cwd": str(self.assets_dir),
+            "headless": self.headless,
+            "timeout_seconds": self.timeout,
+            "timed_out": timed_out,
+            "status": status,
+            "exit_code": rc,
+            "seconds": seconds,
+            "booted": bool(boot_m),
+            "entry_point": f"0x{int(boot_m.group(1), 16):08X}" if boot_m else None,
+            "unresolved_import_count": int(boot_m.group(2)) if boot_m else None,
+            "bound_imports": int(bound_m.group(1)) if bound_m else None,
+            "unresolved_imports": unresolved,
+            "import_trace_enabled": self.import_trace,
+            "import_profile": import_profile,
+            "import_calls_total": sum(calls.values()),
+            "log_stdout": str(stdout_path),
+            "log_stderr": str(stderr_path),
+            "stdout_tail": stdout,
+            "stderr_tail": stderr,
+            "output_tail": output,
+        }
+        self.run_result = result
+        self._write_json("reports/run.json", result)
+
+        # A boot failure is a classified outcome, not a stage error: verify
+        # grades it as launch-failed, so it must not cost the run stage its
+        # points as well. It does not earn them either -- see score().
+        return f"{status}, exit={rc}, {seconds}s, {len(unresolved)} unresolved imports", result
+
+    def stage_verify(self):
+        checks = []
+        gaps = []
+        run = self.run_result
+        if run is None:
+            status = "not-run"
+            reason = "the rebuilt binary was not run"
+        elif run["status"] in ("crashed", "boot-failed"):
+            status = "launch-failed"
+            reason = (f"rebuilt process {run['status']}"
+                      + (f" (exit {run['exit_code']})" if run["exit_code"] is not None else ""))
+        elif run["status"] == "aborted":
+            # The runtime ended the process because the guest raised a C++
+            # exception this layer cannot unwind. The binary did start, so it
+            # is not a boot failure -- but the game did not run either, so it
+            # is not a partial pass. Name the gap plainly.
+            status = "launch-failed"
+            reason = ("rebuilt process aborted on an unhandled guest C++ "
+                      f"exception (exit {run['exit_code']}); guest SEH "
+                      "unwinding is not implemented")
+        elif self.oracle_path:
+            oracle = json.loads(self.oracle_path.read_text())
+            mismatches = []
+            if "exit_code" in oracle:
+                ok = run["exit_code"] == oracle["exit_code"]
+                checks.append({"check": "exit_code", "expected": oracle["exit_code"],
+                               "actual": run["exit_code"], "ok": ok})
+                if not ok:
+                    mismatches.append("exit_code")
+            for needle in oracle.get("stdout_contains", []):
+                ok = needle in run.get("stdout_tail", "")
+                checks.append({"check": "stdout_contains", "expected": needle, "ok": ok})
+                if not ok:
+                    mismatches.append(f"stdout missing {needle!r}")
+            for needle in oracle.get("stderr_contains", []):
+                ok = needle in run.get("stderr_tail", "")
+                checks.append({"check": "stderr_contains", "expected": needle, "ok": ok})
+                if not ok:
+                    mismatches.append(f"stderr missing {needle!r}")
+            if mismatches:
+                status = "trace-diverged"
+                reason = "; ".join(mismatches)
+            else:
+                status = "scenario-pass"
+                reason = "process-level oracle matched"
+                gaps.append("oracle compares process observables only, not gameplay state")
+        else:
+            gaps.append("no independent original-Windows oracle supplied")
+            if run["timed_out"]:
+                status = "partial"
+                reason = ("process launched and stayed alive until the "
+                          f"{self.timeout:g}s timeout; no crash observed, no oracle")
+            elif run["status"] == "exited" and run["exit_code"] == 0:
+                status = "partial"
+                reason = "process launched and exited 0; no oracle supplied"
+            else:
+                status = "partial"
+                reason = (f"process launched and exited {run['exit_code']}; "
+                          "no oracle supplied")
+        gaps.append("no frame, input or audio comparison")
+        gaps.append("low-level register C is not high-level reconstructed source")
+
+        self.verification = {
+            "schema": 1,
+            "generated_at": _now(),
+            "status": status,
+            "reason": reason,
+            "scope": "process" if status in ("scenario-pass", "trace-diverged") else "launch",
+            "game": self.pe_path.name,
+            "executable_sha256": _sha256_file(self.pe_path),
+            "target": ({"os": "web", "arch": "wasm32", "label": "WebAssembly wasm32 (web app)"}
+                       if self.target == ("web", "wasm32")
+                       else {"os": sys.platform, "arch": platform.machine(),
+                             "label": f"{platform.system()} {platform.machine()} (host build)"}),
+            "checks": checks,
+            "oracle_gaps": gaps,
+            "run": run,
+        }
+        self._write_json("reports/verification.json", self.verification)
+        return f"{status}: {reason}", {"status": status, "reason": reason}
+
+    def stage_report(self):
+        self._write_manifest()
+        report = {
+            "schema": 1,
+            "tool": "GameReComp autorecomp",
+            "version": "0.0.1",
+            "generated_at": _now(),
+            "input": str(self.pe_path),
+            "project": str(self.project_dir),
+            "stages": self.stages,
+            "outcome": self.verification or {"status": "not-run", "reason": "verification did not run"},
+            "score": self.score(include_report=True),
+            "manifest": "manifest.json",
+        }
+        self._write_json("reports/report.json", report)
+        html_path = self.project_dir / "reports" / "report.html"
+        html_path.write_text(self._render_html(report))
+        return f"reports in {self.project_dir / 'reports'}", {"score": report["score"], "html": str(html_path)}
+
+    # ------------------------------------------------------------------
+    # helpers
+
+    def _write_json(self, rel, data):
+        path = self.project_dir / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2) + "\n")
+
+    def _write_manifest(self):
+        # A failure before the project stage (e.g. an unsupported PE) still
+        # has to leave a report behind, so the directory may not exist yet.
+        self.project_dir.mkdir(parents=True, exist_ok=True)
+        files = _source_files(self.project_dir)
+        source_digest = _source_digest(files)
+        manifest = {
+            "schema": 1,
+            "game": self.pe_path.name,
+            "input_sha256": _sha256_file(self.pe_path) if self.pe_path.exists() else None,
+            "source_digest_sha256": source_digest,
+            "source_files": files,
+            "binary": None,
+        }
+        if self.binary and self.binary.exists():
+            manifest["binary"] = {
+                "path": str(self.binary),
+                "sha256": _sha256_file(self.binary),
+                "size": self.binary.stat().st_size,
+                "built_from_source_digest": source_digest,
+                "build_command": (f"clang --target=wasm32-unknown-unknown + wasm-ld -> {self.binary.name}"
+                                  if self.binary.suffix == ".wasm"
+                                  else f"cmake -S {self.project_dir} -B {self.binary.parent} "
+                                       f"&& cmake --build {self.binary.parent}"),
+            }
+        self.manifest = manifest
+        (self.project_dir / "manifest.json").write_text(
+            json.dumps(manifest, indent=2) + "\n")
+
+    def score(self, include_report=False):
+        # The report stage records its own success only when it returns, so
+        # stage_report (which computes the score it is about to publish) must
+        # count it explicitly.
+        total = STAGE_WEIGHTS["report"] if include_report else 0
+        run = self.run_result or {}
+        run_status = run.get("status")
+        for st in self.stages:
+            if st["status"] != "ok":
+                continue
+            if st["name"] == "verify" and self.verification:
+                vs = self.verification["status"]
+                if vs in ("scenario-pass", "verified-playable-scope"):
+                    total += STAGE_WEIGHTS["verify"]
+                elif vs == "partial":
+                    total += 8
+            elif st["name"] == "run":
+                # Completing the stage is not the same as the binary running.
+                # The run stage returns ok for every classified outcome -- a
+                # process that never booted, a crash, and a clean exit all end
+                # the stage cleanly. Award its points for what actually
+                # happened: full for a process that launched and either exited
+                # on its own or was still running when the deadline stopped it
+                # (a game loop does not end by itself), half for one that
+                # launched and then faulted, none for one that never reached
+                # its entry point.
+                if st.get("data", {}).get("skipped") or not run_status:
+                    continue
+                if run_status in ("exited", "timeout"):
+                    total += STAGE_WEIGHTS["run"]
+                elif run_status in ("crashed", "signalled", "aborted"):
+                    total += STAGE_WEIGHTS["run"] // 2
+                # boot-failed earns nothing: the rebuilt binary never started.
+            elif st["name"] == "compile" and st.get("data", {}).get("skipped"):
+                continue
+            else:
+                total += STAGE_WEIGHTS[st["name"]]
+        return total
+
+    def _render_html(self, report):
+        esc = lambda s: (str(s).replace("&", "&amp;").replace("<", "&lt;")
+                         .replace(">", "&gt;"))
+        rows = []
+        for st in report["stages"]:
+            rows.append(
+                f"<tr><td>{esc(st['name'])}</td><td class='{esc(st['status'])}'>"
+                f"{esc(st['status'])}</td><td>{st['seconds']:.1f}s</td>"
+                f"<td><pre>{esc(st.get('message',''))}</pre></td></tr>")
+        v = self.verification or {}
+        run = self.run_result or {}
+        cats = (json.loads((self.project_dir / "project.json").read_text())
+                .get("source_categories", {}) if (self.project_dir / "project.json").exists() else {})
+        cat_rows = "".join(
+            f"<tr><td>{esc(k)}</td><td>{v}</td></tr>" for k, v in cats.items())
+        checks = "".join(
+            f"<tr><td>{esc(c.get('check'))}</td><td>{esc(c.get('expected',''))}</td>"
+            f"<td>{esc(c.get('actual',''))}</td><td>{'PASS' if c.get('ok') else 'FAIL'}</td></tr>"
+            for c in v.get("checks", []))
+        return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>autorecomp report - {esc(self.pe_path.name)}</title>
+<style>
+body {{ font: 14px system-ui, sans-serif; margin: 2rem; color: #1b1b1b; }}
+h1 {{ font-size: 1.4rem; }} h2 {{ font-size: 1.1rem; margin-top: 1.6rem; }}
+table {{ border-collapse: collapse; width: 100%; margin: .5rem 0; }}
+td, th {{ border: 1px solid #ccc; padding: .35rem .5rem; text-align: left; vertical-align: top; }}
+pre {{ margin: 0; white-space: pre-wrap; font-size: 12px; }}
+.ok {{ color: #146c2e; }} .failed {{ color: #a11; }} .skipped {{ color: #666; }}
+</style></head><body>
+<h1>autorecomp report: {esc(self.pe_path.name)}</h1>
+<p>Generated {esc(report['generated_at'])}. Project: <code>{esc(self.project_dir)}</code>.
+Score: <strong>{report['score']}/100</strong>.
+Verification: <strong>{esc(v.get('status','not-run'))}</strong> - {esc(v.get('reason',''))}</p>
+<h2>Stages</h2>
+<table><tr><th>Stage</th><th>Status</th><th>Time</th><th>Detail</th></tr>{''.join(rows)}</table>
+<h2>Source provenance</h2>
+<table><tr><th>Category</th><th>Functions</th></tr>{cat_rows}</table>
+<p>Source digest: <code>{esc((self.manifest or {}).get('source_digest_sha256',''))}</code></p>
+<h2>Oracle checks</h2>
+<table><tr><th>Check</th><th>Expected</th><th>Actual</th><th>Result</th></tr>{checks or '<tr><td colspan="4">none supplied</td></tr>'}</table>
+<h2>Oracle gaps</h2><ul>{''.join(f'<li>{esc(g)}</li>' for g in v.get('oracle_gaps', []))}</ul>
+<h2>Run output (tail)</h2><pre>{esc(run.get('output_tail',''))}</pre>
+</body></html>
+"""
+
+
+class _StageRun:
+    def __init__(self, pipeline, name):
+        self.p = pipeline
+        self.name = name
+
+    def __enter__(self):
+        self.t0 = time.time()
+        self.p._emit(event="stage-start", stage=self.name)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        seconds = time.time() - self.t0
+        record = {"name": self.name, "seconds": round(seconds, 2)}
+        if exc_type is None:
+            record.update(status="ok", message=self.message, data=self.data)
+        elif issubclass(exc_type, StageFailure):
+            record.update(status="failed", message=str(exc), data=exc.data)
+        else:
+            record.update(status="failed",
+                          message=f"{exc_type.__name__}: {exc}\n{traceback.format_exc()}")
+        self.p.stages.append(record)
+        self.p.stage_status[self.name] = record["status"]
+        self.p._emit(event="stage-end", **record)
+        return exc_type is not None and not issubclass(exc_type, KeyboardInterrupt)
+
+
+def _run_stage(pipeline, name):
+    stage = _StageRun(pipeline, name)
+    fn = getattr(pipeline, f"stage_{name}")
+    with stage:
+        message, data = fn()
+        stage.message, stage.data = message, data
+
+
+def run_pipeline(pipeline, stages=None):
+    """Run stages in order, stopping at the first non-report failure.
+
+    `stages` selects a subset of STAGES (None means all). Unknown names
+    raise; the caller validates too, but this is the fail-closed backstop.
+    The report stage always runs last even when unrequested, so a partial
+    run still leaves an inspectable reports/report.json -- the same
+    invariant a full run keeps.
+
+    Verification still runs when the run stage failed but left evidence:
+    a launch-failed verdict is a verification result, and skipping it
+    would leave the project without any reports/verification.json.
+    """
+    selected = list(STAGES)
+    if stages is not None:
+        unknown = [s for s in stages if s not in STAGES]
+        if unknown:
+            raise ValueError(f"unknown stage(s): {', '.join(sorted(unknown))}")
+        selected = [s for s in STAGES if s in stages]
+        if "report" not in selected:
+            selected.append("report")
+    stop = False
+    for name in selected:
+        if stop and name != "report" and not (
+                name == "verify" and pipeline.run_result is not None):
+            pipeline.stages.append({
+                "name": name, "status": "skipped", "seconds": 0.0,
+                "message": "skipped after earlier failure", "data": {}})
+            pipeline.stage_status[name] = "skipped"
+            pipeline._emit(event="stage-end", **pipeline.stages[-1])
+            continue
+        _run_stage(pipeline, name)
+        if pipeline.stage_status[name] == "failed" and name != "report":
+            stop = True
+    return pipeline

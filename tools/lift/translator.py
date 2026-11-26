@@ -1,0 +1,419 @@
+"""
+Translator / Code Generator for 32-bit static recompilation.
+Orchestrates the full pipeline: PE analysis -> disassembly -> lifting -> C output.
+Generates split source files, dispatch table, and function headers.
+"""
+
+import os
+import sys
+import json
+import time
+from pathlib import Path
+
+# These three were siblings when this file was written; the tree has since been
+# split into pe/, disasm/ and lift/ and the imports never followed, so
+# `python -m tools` has been dead. Resolve them by path, the way every other
+# consumer of this toolkit does, rather than half-converting the tree to
+# packages: lift32 itself still does `from decode16 import ...`, so relative
+# imports here would only move the failure one level down.
+_TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _sub in ('pe', 'disasm', 'lift'):
+    _p = os.path.join(_TOOLS, _sub)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from pe_analyze import analyze_pe, build_iat_map, read_bytes_at_va, export_json
+from disasm32 import Disassembler, Function
+from lift32 import Lifter
+import eh32
+
+
+def load_pe(filepath: str):
+    """Load and analyze a PE file, returning everything needed for recompilation."""
+    print(f"[*] Analyzing PE: {filepath}")
+    info = analyze_pe(filepath)
+
+    with open(filepath, 'rb') as f:
+        pe_data = f.read()
+
+    iat_map = build_iat_map(info)
+    print(f"[*] Image base: 0x{info.image_base:08X}")
+    print(f"[*] Code: 0x{info.code_start:08X} - 0x{info.code_end:08X}")
+    print(f"[*] Data: 0x{info.data_start:08X} - 0x{info.data_end:08X}")
+    print(f"[*] IAT entries: {len(iat_map)}")
+
+    return info, pe_data, iat_map
+
+
+def make_read_va(pe_data: bytes, info):
+    """Build a read_va(va, size) reader over a PE image's sections in memory."""
+    base = info.image_base
+    spans = []
+    for s in getattr(info, 'sections', ()):
+        sva = base + s.virtual_address
+        vsz = max(s.virtual_size or 0, s.raw_size or 0)
+        spans.append((sva, sva + vsz, s.raw_offset, s.raw_offset + s.raw_size))
+
+    def read_va(va: int, n: int) -> bytes:
+        for lo, hi, rlo, rhi in spans:
+            if lo <= va < hi:
+                off = rlo + (va - lo)
+                if off >= rhi:
+                    return b'\x00' * n
+                chunk = pe_data[off:min(off + n, rhi)]
+                return chunk if len(chunk) == n else chunk + b'\x00' * (n - len(chunk))
+        return b''
+
+    return read_va
+
+
+def discover_functions(pe_data: bytes, info, iat_map: dict) -> dict:
+    """Discover all functions in the PE's code section.
+
+    The PE entry point and every export are seeded explicitly: they are
+    functions whether or not the call/jmp/prologue scan recognises them.
+    Without this, a CRT entry that opens with `mov eax, fs:[0]` (the SEH
+    prologue) was lost when the prologue scan seeded the inner `push ebp`
+    instead, and `recomp_host_run` had no function at the entry VA. disasm32's
+    find_functions documents this (`seeds` -- "the PE entry point above all");
+    the default pipeline just never passed them.
+    """
+    disasm = Disassembler(pe_data, info.image_base, info.sections)
+    seeds = [info.image_base + info.entry_point_rva]
+    seeds += [info.image_base + e.rva for e in getattr(info, 'exports', []) if e.rva]
+    functions = disasm.find_functions(info.code_start, info.code_end, iat_map, seeds=seeds)
+
+    # Also recover isolated EH targets (DMD finally blocks / split catch blocks /
+    # MSVC catch funclets) reachable only through SEH metadata tables.
+    read_va = make_read_va(pe_data, info)
+    from capstone import Cs, CS_ARCH_X86, CS_MODE_32
+    md = Cs(CS_ARCH_X86, CS_MODE_32)
+    extra_work = []
+    for func in list(functions.values()):
+        blk = func.blocks.get(func.address)
+        if not blk or not blk.instructions:
+            continue
+        aux = eh32.aux_code_targets(md, read_va, blk.instructions[:eh32.PROLOGUE_WINDOW], func.address)
+        if not aux:
+            continue
+        own_insns = {ins.address for b in func.blocks.values() for ins in b.instructions}
+        for tgt in aux:
+            if not (info.code_start <= tgt < info.code_end) or tgt in functions:
+                continue
+            # If a catch continuation sits cleanly inside its parent body (and is
+            # not a standalone finally/funclet), lift32 emits L_<addr> in-place.
+            if tgt in own_insns:
+                _, finallies = (set(), set())
+                h = eh32._installed_handler(blk.instructions[:eh32.PROLOGUE_WINDOW])
+                tbl = eh32.dmd_handlertable(read_va, h, func.address) if h else None
+                if tbl:
+                    _, finallies = eh32.dmd_targets(read_va, tbl)
+                if tgt not in finallies and eh32.funcinfo(read_va, h) is None:
+                    continue
+            extra_work.append(tgt)
+    seen_extra = set()
+    while extra_work:
+        tgt = extra_work.pop()
+        if tgt in seen_extra or tgt in functions or not (info.code_start <= tgt < info.code_end):
+            continue
+        seen_extra.add(tgt)
+        fn = disasm.disassemble_function(tgt, iat_map)
+        if fn and fn.blocks:
+            functions[tgt] = fn
+            for callee in getattr(fn, 'calls_to', ()):
+                if callee not in functions and callee not in seen_extra:
+                    extra_work.append(callee)
+    return functions
+
+
+def resolve_iat_calls(iat_map: dict, info) -> dict:
+    """
+    Build a map from IAT slot VA -> function pointer VA.
+    For import calls like: call [0x005A9XXX] -> the address in brackets is the IAT slot.
+    """
+    resolved = {}
+    for imp in info.imports:
+        va = info.image_base + imp.iat_rva
+        name = imp.name if imp.name else f"ordinal_{imp.ordinal}"
+        resolved[va] = (imp.dll, name)
+    return resolved
+
+
+MAX_UNIT_BYTES = 8 * 1024 * 1024
+
+
+def _write_unit(filepath, chunk, first_index, last_index):
+    """Write one source unit; chunk is a list of (func, lifted_code)."""
+    with open(filepath, 'w') as f:
+        f.write(f"/* Auto-generated by XWA recompiler - DO NOT EDIT */\n")
+        f.write(f"/* Functions {first_index} to {last_index} */\n")
+        f.write(f"/* Address range: 0x{chunk[0][0].address:08X} - 0x{chunk[-1][0].address:08X} */\n\n")
+        f.write(f'#define RECOMP_GENERATED_CODE\n')
+        f.write(f'#include "recomp_types.h"\n')
+        f.write(f'#include "recomp_funcs.h"\n')
+        f.write(f'#include <math.h>\n')
+        f.write(f'#include <string.h>\n\n')
+        for _func, code in chunk:
+            f.write(code)
+            f.write('\n\n')
+
+
+def generate_recomp_files(functions: dict, iat_map: dict, output_dir: str,
+                          split_size: int = 1000, func_names: dict = None,
+                          max_unit_bytes: int = MAX_UNIT_BYTES,
+                          highlevel: dict = None, read_va=None):
+    """
+    Generate recompiled C source files from discovered functions.
+
+    functions: dict of addr -> Function
+    iat_map: VA -> (dll, name) for import resolution
+    output_dir: directory to write generated files
+    split_size: max functions per source file
+    func_names: optional addr -> name map for known function names
+    max_unit_bytes: soft cap on generated text per source file. A function
+        count alone is not a size bound: GeneRally's first 1,000 functions
+        produced a 273 MB unit because individual bodies reach 2.25 MB. A
+        single function larger than the cap still gets a unit of its own.
+    highlevel: address -> replacement entry from tools/autorecomp/highlevel.py.
+        A replaced function's mechanical body is emitted under
+        `sub_XXXXXXXX__lowlevel` and the dispatch table points at the
+        high-level entry point instead, so the fallback stays in the build.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Without `lifted`, lift32 emits a direct call to sub_<target> for every
+    # call, even targets outside the image. Discovery now recovers enough
+    # garbage calls (noiz2sa, rrootage: 0x1F02ADD, 0x1CCA4D4) that those
+    # undeclared names fail the build; the lifted set makes them ICALLs.
+    lifter = Lifter(iat_map=iat_map, func_names=func_names or {},
+                    lifted=set(functions.keys()))
+    eh_md = None
+    if read_va is not None:
+        from capstone import Cs, CS_ARCH_X86, CS_MODE_32
+        eh_md = Cs(CS_ARCH_X86, CS_MODE_32)
+
+    sorted_funcs = sorted(functions.values(), key=lambda f: f.address)
+    total = len(sorted_funcs)
+    print(f"[*] Generating C code for {total} functions...")
+
+    file_idx = 0
+    chunk = []          # list of (func, lifted_code)
+    chunk_bytes = 0
+    chunk_first = 0
+    all_func_names = []  # (addr, name) pairs for dispatch table
+    units = []
+
+    def flush(last_index):
+        nonlocal file_idx, chunk, chunk_bytes, chunk_first
+        filename = f"recomp_{file_idx:04d}.c"
+        filepath = os.path.join(output_dir, filename)
+        _write_unit(filepath, chunk, chunk_first, last_index)
+        units.append({
+            "file": filename,
+            "first_function_index": chunk_first,
+            "last_function_index": last_index,
+            "first_address": f"0x{chunk[0][0].address:08X}",
+            "last_address": f"0x{chunk[-1][0].address:08X}",
+            "functions": len(chunk),
+            "bytes": os.path.getsize(filepath),
+        })
+        file_idx += 1
+        if file_idx % 5 == 0:
+            print(f"[*] Generated {last_index + 1}/{total} functions ({file_idx} files)...")
+        chunk = []
+        chunk_bytes = 0
+        chunk_first = last_index + 1
+
+    for func_idx, func in enumerate(sorted_funcs):
+        # A function with a high-level replacement still gets its mechanical
+        # body emitted, under a distinct name: it stays compiled, stays
+        # countable and stays available as the comparison baseline, but the
+        # dispatch table points at the high-level entry point instead. Dropping
+        # it would make the fallback invisible, which is the one thing the
+        # source-quality contract does not allow.
+        high = highlevel.get(func.address) if highlevel else None
+        # The lifter writes the body under func.name, so a replaced function's
+        # mechanical body is emitted under its __lowlevel name by renaming the
+        # function for the duration of the lift and putting it back after.
+        original_name = func.name
+        if high:
+            func.name = high["low_level_symbol"]
+        try:
+            eh_resume = None
+            if read_va is not None and eh_md is not None and not high:
+                blk = func.blocks.get(func.address) if hasattr(func, 'blocks') else None
+                if blk and blk.instructions:
+                    eh_resume = eh32.resume_points(
+                        eh_md, read_va, blk.instructions[:eh32.PROLOGUE_WINDOW], func.address)
+            code = lifter.lift_function(func, eh_resume=eh_resume) if eh_resume else lifter.lift_function(func)
+            name = func.name
+        except Exception as e:
+            # An empty stub would let the rebuilt game run with a
+            # function silently doing nothing; fail loudly instead.
+            symbol = high["low_level_symbol"] if high else f"sub_{func.address:08X}"
+            code = (f"/* ERROR lifting sub_{func.address:08X}: {e} */\n"
+                    f"void {symbol}(void) {{\n"
+                    f'    fprintf(stderr, "[recomp] unresolved function 0x{func.address:08X} called\\n");\n'
+                    f"    abort();\n"
+                    f"}}\n")
+            name = symbol
+        finally:
+            func.name = original_name
+        # What the dispatch table calls: the high-level entry point when one
+        # exists, the mechanical body otherwise.
+        all_func_names.append((func.address,
+                               high["entry_symbol"] if high else name))
+        chunk.append((func, code))
+        chunk_bytes += len(code)
+        if len(chunk) >= split_size or chunk_bytes >= max_unit_bytes:
+            flush(func_idx)
+    if chunk:
+        flush(total - 1)
+
+    print(f"[*] Generated {file_idx} source files in {output_dir}")
+
+    with open(os.path.join(output_dir, "recomp_units.json"), "w") as f:
+        json.dump({"schema": 1, "units": units}, f, indent=2)
+
+    # Generate forward declarations header
+    header_path = os.path.join(output_dir, "recomp_funcs.h")
+    with open(header_path, 'w') as f:
+        f.write("/* Auto-generated function declarations - DO NOT EDIT */\n")
+        f.write("#pragma once\n\n")
+        f.write("#include <stdint.h>\n\n")
+        f.write(f"/* {len(all_func_names)} recompiled functions */\n\n")
+        for addr, name in all_func_names:
+            f.write(f"void {name}(void);  /* 0x{addr:08X} */\n")
+        if highlevel:
+            # The mechanical bodies of replaced functions are still compiled
+            # and still need declaring.
+            for addr, high in sorted(highlevel.items()):
+                f.write(f"void {high['low_level_symbol']}(void);"
+                        f"  /* 0x{addr:08X} mechanical fallback */\n")
+
+    # Generate dispatch table
+    dispatch_path = os.path.join(output_dir, "recomp_dispatch.c")
+    with open(dispatch_path, 'w') as f:
+        f.write("/* Auto-generated dispatch table - DO NOT EDIT */\n\n")
+        f.write('#include "recomp_types.h"\n')
+        f.write('#include "recomp_funcs.h"\n\n')
+        f.write(f"const recomp_dispatch_entry_t recomp_dispatch_table[] = {{\n")
+        for addr, name in sorted(all_func_names, key=lambda x: x[0]):
+            f.write(f"    {{ 0x{addr:08X}u, {name} }},\n")
+        f.write(f"}};\n\n")
+        f.write(f"const uint32_t recomp_dispatch_count = {len(all_func_names)};\n")
+
+    print(f"[*] Generated dispatch table with {len(all_func_names)} entries")
+    return all_func_names
+
+
+def generate_function_list(functions: dict, output_path: str):
+    """Export the function list to JSON for external tools."""
+    func_list = []
+    for addr, func in sorted(functions.items()):
+        func_list.append({
+            'address': f"0x{addr:08X}",
+            'address_int': addr,
+            'name': func.name,
+            'size': func.size,
+            'num_blocks': len(func.blocks),
+            'num_instructions': func.num_instructions,
+            'is_thunk': func.is_thunk,
+            'calls_to': [f"0x{t:08X}" for t in sorted(func.calls_to)],
+        })
+
+    with open(output_path, 'w') as f:
+        json.dump(func_list, f, indent=2)
+    print(f"[*] Exported {len(func_list)} functions to {output_path}")
+
+
+def generate_import_stubs(iat_map: dict, output_path: str):
+    """Generate stub implementations for imported functions."""
+    by_dll = {}
+    for va, (dll, name) in sorted(iat_map.items()):
+        by_dll.setdefault(dll, []).append((va, name))
+
+    with open(output_path, 'w') as f:
+        f.write("/* Import bridge stubs - manual implementation needed */\n\n")
+        f.write('#include "recomp_types.h"\n\n')
+
+        for dll, imports in sorted(by_dll.items()):
+            f.write(f"\n/* ===== {dll} ===== */\n\n")
+            for va, name in imports:
+                f.write(f"/* 0x{va:08X} */ void bridge_{name}(void) {{\n")
+                f.write(f"    /* TODO: implement {dll}::{name} */\n")
+                f.write(f"    STUB(\"{dll}::{name}\");\n")
+                f.write(f"}}\n\n")
+
+    print(f"[*] Generated import stubs for {sum(len(v) for v in by_dll.values())} imports")
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='32-bit PE static recompiler')
+    parser.add_argument('pe_file', help='the 32-bit PE to lift')
+    parser.add_argument('--output', '-o', default='src/game/recomp/gen',
+                        help='Output directory for generated code')
+    parser.add_argument('--split', type=int, default=1000,
+                        help='Max functions per source file')
+    parser.add_argument('--split-bytes', type=int, default=MAX_UNIT_BYTES,
+                        help=f'Soft cap on generated text per source file '
+                             f'(default {MAX_UNIT_BYTES} bytes)')
+    parser.add_argument('--all', action='store_true',
+                        help='Run full pipeline')
+    parser.add_argument('--analyze-only', action='store_true',
+                        help='Only run PE analysis')
+    parser.add_argument('--functions-json', default=None,
+                        help='Export function list to JSON')
+    parser.add_argument('--stubs', default=None,
+                        help='Generate import stub file')
+    parser.add_argument('--pe-json', default=None,
+                        help='Export PE analysis to JSON')
+
+    args = parser.parse_args()
+
+    start_time = time.time()
+
+    # Step 1: Analyze PE
+    info, pe_data, iat_map = load_pe(args.pe_file)
+
+    if args.pe_json:
+        export_json(info, args.pe_json)
+
+    if args.analyze_only:
+        from pe_analyze import print_summary
+        print_summary(info)
+        return
+
+    # Step 2: Discover functions
+    print(f"\n[*] Phase 2: Function discovery...")
+    functions = discover_functions(pe_data, info, iat_map)
+
+    if args.functions_json:
+        generate_function_list(functions, args.functions_json)
+
+    if args.stubs:
+        generate_import_stubs(iat_map, args.stubs)
+
+    if args.all:
+        # Step 3: Generate recompiled C code
+        print(f"\n[*] Phase 3: Code generation...")
+        generate_recomp_files(
+            functions, iat_map, args.output,
+            split_size=args.split, max_unit_bytes=args.split_bytes,
+        )
+        units = [p for p in os.listdir(args.output)
+                 if p.startswith("recomp_") and p.endswith(".c")
+                 and p != "recomp_dispatch.c"]
+
+        elapsed = time.time() - start_time
+        print(f"\n[*] Complete! {len(functions)} functions recompiled in {elapsed:.1f}s")
+        print(f"[*] Output: {args.output}")
+        print(f"[*] Generated files: {len(units)} source + dispatch + header")
+
+    elapsed = time.time() - start_time
+    print(f"\n[*] Total time: {elapsed:.1f}s")
+
+
+if __name__ == '__main__':
+    main()
