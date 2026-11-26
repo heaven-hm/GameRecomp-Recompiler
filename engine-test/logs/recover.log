@@ -1,0 +1,11 @@
+[*] Scanning for call targets in 0x00401000-0x00401C00...
+[*] Found 9 potential call targets
+[*] Found 0 prologue patterns
+[*] Total unique function candidates: 10
+[*] Disassembling 10 initial candidates...
+[*] Discovery round 2: 7 new jmp/call targets...
+[*] Successfully disassembled 17 functions (2 discovery rounds)
+[*] 3 scan candidates are labels inside another body: aliases
+[*] Clamped 2 function extents to the next function start
+[*] Added 9 branch targets that had no dispatchable body
+[*] Added 7 branch targets that had no dispatchable body

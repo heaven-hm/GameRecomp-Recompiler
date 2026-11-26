@@ -1,0 +1,4 @@
+[pe] <embedded image> mapped at 0x00400000, span 0x5000
+[pe] bound 3 imports, 0 unresolved
+[host] C:\arith-calc.exe booted: entry 0x00401B00, 0 unresolved imports
+[win32hle] ExitProcess(0) from guest 0x00401B00
