@@ -167,6 +167,15 @@ pub struct Client {
 }
 
 impl Client {
+    /// Construct a client without an engine path. The SDK discovers the
+    /// engine from `GAMERECOMP_CLI` or PATH; callers never hard-code a path.
+    pub fn from_env() -> Result<Self, Error> {
+        let cli = std::env::var_os("GAMERECOMP_CLI")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("game-recomp-cli"));
+        Self::new(cli)
+    }
+
     /// Validate `cli` and construct a client with no timeout (blocking mode).
     pub fn new(cli: impl AsRef<Path>) -> Result<Self, Error> {
         Self::new_with_timeout(cli, None)

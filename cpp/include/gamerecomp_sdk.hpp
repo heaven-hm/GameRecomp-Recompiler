@@ -67,6 +67,11 @@ struct Report {
 
 class Client {
 public:
+    /* No path needed: the SDK discovers the engine from GAMERECOMP_CLI/PATH. */
+    Client() {
+        if (gr_client_init_default(&c_) != 0)
+            throw std::runtime_error(gr_last_error(&c_));
+    }
     explicit Client(const std::string &cli_path) {
         if (gr_client_init(&c_, cli_path.c_str()) != 0)
             throw std::runtime_error(gr_last_error(&c_));

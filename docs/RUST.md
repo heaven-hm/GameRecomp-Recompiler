@@ -63,7 +63,7 @@ fn main() {
         eprintln!("usage: basic <cli> <game.exe> <project-dir>");
         std::process::exit(2);
     }
-    let client = match Client::new(&args[0]) {
+    let client = match Client::from_env() {
         Ok(c) => c,
         Err(e) => { eprintln!("init: {e}"); std::process::exit(1); }
     };

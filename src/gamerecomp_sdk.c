@@ -245,6 +245,12 @@ int gr_client_init(gr_client *c, const char *cli_path) {
     return gr_result_ok(gr_client_init_ex(c, cli_path)) ? 0 : -1;
 }
 
+int gr_client_init_default(gr_client *c) {
+    const char *path = getenv("GAMERECOMP_CLI");
+    if (!path || !*path) path = "game-recomp-cli";
+    return gr_client_init(c, path);
+}
+
 int gr_recompile(gr_client *c, const char *pe_path, const char *project_dir,
                  char *report_path, size_t report_path_size) {
     return gr_result_ok(gr_recompile_ex(c, pe_path, project_dir,

@@ -6,7 +6,7 @@ and the same fail-closed contract as every other binding.
 
 ```js
 const { Client, RecompileError } = require('./js');
-const client = new Client('/abs/path/to/game-recomp-cli'); // or GAMERECOMP_CLI
+const client = new Client(); // or GAMERECOMP_CLI
 const report = client.recompile('game.exe', 'out');
 console.log(report.score);
 ```

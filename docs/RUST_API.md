@@ -89,7 +89,7 @@ Example of inspecting a failure:
 use gamerecomp_sdk::{Client, Error};
 
 # fn run() {
-let client = Client::new("/path/to/game-recomp-cli").expect("client");
+let client = Client::from_env().expect("client");
 match client.recompile("game.exe", "out") {
     Ok(report) => println!("score = {:?}", report.score),
     Err(Error::Failed { status, stderr, .. }) => {
@@ -113,7 +113,7 @@ use std::time::Duration;
 use gamerecomp_sdk::Client;
 
 # fn build() -> Result<(), gamerecomp_sdk::Error> {
-let client = Client::new("/path/to/game-recomp-cli")?
+let client = Client::from_env()?
     .with_timeout(Duration::from_secs(300));
 
 assert_eq!(client.timeout(), Some(Duration::from_secs(300)));

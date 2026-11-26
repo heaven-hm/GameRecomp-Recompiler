@@ -117,6 +117,10 @@ typedef struct gr_client {
  * On failure the reason is available from gr_last_error(c). */
 int gr_client_init(gr_client *c, const char *cli_path);
 
+/* Initialise from the environment: GAMERECOMP_CLI when set, otherwise the
+ * engine discovered on PATH. Callers do not pass an engine path. */
+int gr_client_init_default(gr_client *c);
+
 /* Recompile pe_path into the existing directory project_dir. Returns 0 on
  * success and, when report_path != NULL and report_path_size > 0, writes a
  * NUL-terminated report path into that caller-owned buffer. Returns -1 on any
