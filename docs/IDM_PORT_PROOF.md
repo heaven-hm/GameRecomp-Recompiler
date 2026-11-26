@@ -5,16 +5,15 @@ Internet Download Manager (`idman643build18.exe`, SHA-256
 recompiled by the **real GameReComp CLI v0.3.0** into a native macOS arm64
 binary through every SDK binding.
 
-Each screenshot shows both the **real SDK app source code** and its **real
-output** from that run:
+Each screenshot is a distinct real Terminal window showing the **actual command and real output** of that SDK app porting IDM:
 
 | SDK | Source | Proof screenshot |
 |---|---|---|
-| C | [`demos/apps/c/app.c`](../demos/apps/c/app.c) | [`proof/screenshots/idm-c.jpeg`](../proof/screenshots/idm-c.jpeg) |
-| C++ | [`demos/apps/cpp/app.cpp`](../demos/apps/cpp/app.cpp) | [`proof/screenshots/idm-cpp.jpeg`](../proof/screenshots/idm-cpp.jpeg) |
-| Python | [`demos/apps/python/app.py`](../demos/apps/python/app.py) | [`proof/screenshots/idm-python.jpeg`](../proof/screenshots/idm-python.jpeg) |
-| JavaScript/TypeScript | [`demos/apps/js/app.js`](../demos/apps/js/app.js) | [`proof/screenshots/idm-javascript.jpeg`](../proof/screenshots/idm-javascript.jpeg) |
-| Rust (Blaze-built) | [`demos/apps/rust/app.rs`](../demos/apps/rust/app.rs) | [`proof/screenshots/idm-rust.jpeg`](../proof/screenshots/idm-rust.jpeg) |
+| C | [`demos/apps/c/app.c`](../demos/apps/c/app.c) | [`proof/screenshots/terminal-c.png`](../proof/screenshots/terminal-c.png) |
+| C++ | [`demos/apps/cpp/app.cpp`](../demos/apps/cpp/app.cpp) | [`proof/screenshots/terminal-cpp.png`](../proof/screenshots/terminal-cpp.png) |
+| Python | [`demos/apps/python/app.py`](../demos/apps/python/app.py) | [`proof/screenshots/terminal-python.png`](../proof/screenshots/terminal-python.png) |
+| JavaScript/TypeScript | [`demos/apps/js/app.js`](../demos/apps/js/app.js) | [`proof/screenshots/terminal-javascript.png`](../proof/screenshots/terminal-javascript.png) |
+| Rust (Blaze-built) | [`demos/apps/rust/app.rs`](../demos/apps/rust/app.rs) | [`proof/screenshots/terminal-rust.png`](../proof/screenshots/terminal-rust.png) |
 
 All five apps exited 0 with `APP_OK`; C++/Python/JS reported score 85 and 6
 stages; Rust reported `Some(85)`. Exact stdout, stderr, exit codes, source

@@ -14,11 +14,11 @@ sets the GameReComp checkout as cwd; no fake CLI is involved.
 
 | SDK | App | Screenshot | stdout SHA-256 (see `proof/apps-real/results.json`) |
 |---|---|---|---|
-| C | `demos/apps/c/app.c` | `proof/screenshots/c-real.jpeg` | recorded |
-| C++ | `demos/apps/cpp/app.cpp` | `proof/screenshots/cpp-real.jpeg` | recorded |
-| Python | `demos/apps/python/app.py` | `proof/screenshots/python-real.jpeg` | recorded |
-| JavaScript/TypeScript | `demos/apps/js/app.js` | `proof/screenshots/javascript-real.jpeg` | recorded |
-| Rust | `demos/apps/rust/app.rs` (built with Blaze) | `proof/screenshots/rust-real.jpeg` | recorded |
+| C | `demos/apps/c/app.c` | `proof/screenshots/terminal-c.png` | recorded |
+| C++ | `demos/apps/cpp/app.cpp` | `proof/screenshots/terminal-cpp.png` | recorded |
+| Python | `demos/apps/python/app.py` | `proof/screenshots/terminal-python.png` | recorded |
+| JavaScript/TypeScript | `demos/apps/js/app.js` | `proof/screenshots/terminal-javascript.png` | recorded |
+| Rust | `demos/apps/rust/app.rs` (built with Blaze) | `proof/screenshots/terminal-rust.png` | recorded |
 
 All five apps exited 0 and printed `APP_OK`. Exact stdout/stderr, hashes and
 exit codes are in `proof/apps-real/results.json`.
