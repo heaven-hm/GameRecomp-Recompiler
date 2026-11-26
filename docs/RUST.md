@@ -82,8 +82,8 @@ Run:
 
 ```sh
 cd rust
-blaze test
-blaze run --example basic -- /path/to/game-recomp-cli /path/to/game.exe /tmp/project
+cargo test
+cargo run --example basic -- /path/to/game-recomp-cli /path/to/game.exe /tmp/project
 ```
 
 ## Adding the crate as a dependency

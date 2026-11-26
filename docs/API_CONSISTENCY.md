@@ -135,7 +135,7 @@ checkout:
 |---|---|---|
 | C | compile `src/gamerecomp_sdk.c` into your program with `-Iinclude` (C11, POSIX) | no package; copy/build from source |
 | C++ | include `cpp/include/gamerecomp_sdk.hpp` and also compile `src/gamerecomp_sdk.c` (C++17) | no package; header + C source |
-| Rust | `blaze run --example basic -- <cli> <pe> <project>` inside `rust/`, or add a path dependency | `gamerecomp-sdk = { path = ".../rust" }` |
+| Rust | `cargo run --example basic -- <cli> <pe> <project>` inside `rust/`, or add a path dependency | `gamerecomp-sdk = { path = ".../rust" }` |
 | Python | `PYTHONPATH=python python3 …` or `python3 -m pip install -e python` | editable/local install only |
 
 A working `game-recomp-cli` binary must be supplied by the caller in every
@@ -204,7 +204,7 @@ At this base the four local checks were run and all passed:
 
 ```sh
 PYTHONPATH=python python3 -m pytest python/tests -q   # 13 passed
-(cd rust && blaze test)                               # 15 unit tests + example build
+(cd rust && cargo test)                               # 15 unit tests + example build
 sh tests/test_c_sdk.sh                                # C SDK: PASS
 sh tests/test_cpp_sdk.sh                              # C++ SDK: PASS
 ```

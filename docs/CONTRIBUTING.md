@@ -73,7 +73,7 @@ must be checked at the repository's CI page.
 | Check | Command | Ubuntu | macOS | Verifies | Local result |
 |---|---|:---:|:---:|---|---|
 | Python | `PYTHONPATH=python python3 -m pytest python/tests -q` | ✓ | ✓ | 13 tests: CLI/PE validation, success, CLI failure, `inspect()` (4), `recompile_to_path()` (4), delegation | 13 passed |
-| Rust | `cd rust && blaze test` | ✓ | ✓ | 15 unit tests (incl. 3 Unix fake-CLI subprocess tests) and example build; no external crates | 15 passed |
+| Rust | `cd rust && cargo test` | ✓ | ✓ | 15 unit tests (incl. 3 Unix fake-CLI subprocess tests) and example build; no external crates | 15 passed |
 | C | `sh tests/test_c_sdk.sh` | ✓ | ✓ | `-Wall -Wextra` compile, fake-CLI report path, project-dir validation, exec-error reason, `EINTR` retry | PASS |
 | C++ | `sh tests/test_cpp_sdk.sh` | ✓ | ✓ | `-Wall -Wextra` compile, fake-CLI report, `Report::score()` with score present (`70`) and absent (`-1`); no exception test | PASS |
 
