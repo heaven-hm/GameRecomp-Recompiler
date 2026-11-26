@@ -89,11 +89,11 @@ is [`docs/APPS.md`](docs/APPS.md). One browser screenshot per binding:
 
 | SDK | Working app | Proof screenshot |
 |---|---|---|
-| C | [`demos/apps/c/app.c`](demos/apps/c/app.c) | [![C app proof](proof/screenshots/c-real.jpeg)](proof/screenshots/c-real.jpeg) |
-| C++ | [`demos/apps/cpp/app.cpp`](demos/apps/cpp/app.cpp) | [![C++ app proof](proof/screenshots/cpp-real.jpeg)](proof/screenshots/cpp-real.jpeg) |
-| Python | [`demos/apps/python/app.py`](demos/apps/python/app.py) | [![Python app proof](proof/screenshots/python-real.jpeg)](proof/screenshots/python-real.jpeg) |
-| JavaScript/TypeScript | [`demos/apps/js/app.js`](demos/apps/js/app.js) | [![JS app proof](proof/screenshots/javascript-real.jpeg)](proof/screenshots/javascript-real.jpeg) |
-| Rust | [`demos/apps/rust/app.rs`](demos/apps/rust/app.rs) | [![Rust app proof](proof/screenshots/rust-real.jpeg)](proof/screenshots/rust-real.jpeg) |
+| C | [`demos/apps/c/app.c`](demos/apps/c/app.c) | [![C app proof](proof/screenshots/terminal-c.png)](proof/screenshots/terminal-c.png) |
+| C++ | [`demos/apps/cpp/app.cpp`](demos/apps/cpp/app.cpp) | [![C++ app proof](proof/screenshots/terminal-cpp.png)](proof/screenshots/terminal-cpp.png) |
+| Python | [`demos/apps/python/app.py`](demos/apps/python/app.py) | [![Python app proof](proof/screenshots/terminal-python.png)](proof/screenshots/terminal-python.png) |
+| JavaScript/TypeScript | [`demos/apps/js/app.js`](demos/apps/js/app.js) | [![JS app proof](proof/screenshots/terminal-javascript.png)](proof/screenshots/terminal-javascript.png) |
+| Rust | [`demos/apps/rust/app.rs`](demos/apps/rust/app.rs) | [![Rust app proof](proof/screenshots/terminal-rust.png)](proof/screenshots/terminal-rust.png) |
 
 Run them all with [`sh demos/run_apps_real.sh`](demos/run_apps_real.sh) after
 setting `GAMERECOMP_REAL_CLI`, `GAMERECOMP_SOURCE_ROOT` and
