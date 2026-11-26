@@ -1,0 +1,12 @@
+{
+  "name": "@heaven-hm/gamerecomp-sdk",
+  "version": "0.3.0",
+  "description": "JavaScript/TypeScript client SDK for GameReComp v0.3.0",
+  "license": "AGPL-3.0-only",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
