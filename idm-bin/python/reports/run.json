@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python/build/idman643build18"
+  ],
+  "cwd": "/Users/haseeb-mir/Downloads/recomp-apps/PRIORITY_TITLE_PROOF/02_IDM/01_inputs",
+  "headless": true,
+  "timeout_seconds": 30.0,
+  "timed_out": false,
+  "status": "exited",
+  "exit_code": 0,
+  "seconds": 0.6,
+  "booted": true,
+  "entry_point": "0x00405B7A",
+  "unresolved_import_count": 0,
+  "bound_imports": 104,
+  "unresolved_imports": [],
+  "import_trace_enabled": false,
+  "import_profile": [],
+  "import_calls_total": 0,
+  "log_stdout": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python/logs/run.stdout.log",
+  "log_stderr": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python/logs/run.stderr.log",
+  "stdout_tail": "",
+  "stderr_tail": "[pe] <embedded image> mapped at 0x00400000, span 0x1B000\n[pe] bound 104 imports, 0 unresolved\n[host] C:\\idman643build18.exe booted: entry 0x00405B7A, 0 unresolved imports\n[MessageBox] IDM Setup: IDM no longer supports older versions of Windows such as Windows XP or Vista.\nIDM requires Windows 7 or later.\n[win32hle] ExitProcess(0) from guest 0x00408CA5",
+  "output_tail": "[pe] <embedded image> mapped at 0x00400000, span 0x1B000\n[pe] bound 104 imports, 0 unresolved\n[host] C:\\idman643build18.exe booted: entry 0x00405B7A, 0 unresolved imports\n[MessageBox] IDM Setup: IDM no longer supports older versions of Windows such as Windows XP or Vista.\nIDM requires Windows 7 or later.\n[win32hle] ExitProcess(0) from guest 0x00408CA5"
+}

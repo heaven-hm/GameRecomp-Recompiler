@@ -1,0 +1,147 @@
+{
+  "schema": 1,
+  "tool": "GameReComp autorecomp",
+  "version": "0.0.1",
+  "generated_at": "2026-11-26T04:10:37Z",
+  "input": "/Users/haseeb-mir/Downloads/recomp-apps/PRIORITY_TITLE_PROOF/02_IDM/01_inputs/idman643build18.exe",
+  "project": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust",
+  "stages": [
+    {
+      "name": "inspect",
+      "seconds": 3.34,
+      "status": "ok",
+      "message": "i386 PE32, 104 imports, entry 0x00405B7A",
+      "data": {
+        "path": "/Users/haseeb-mir/Downloads/recomp-apps/PRIORITY_TITLE_PROOF/02_IDM/01_inputs/idman643build18.exe",
+        "size": 12164608,
+        "sha256": "7346128fab42957b4254eabdb012bfdbd751e9069361e98a6916f26bb03d62ee",
+        "md5": "1446446afb431ded79fbe53d639af321",
+        "sha1": "2a9c6eee6bd9cddaa2ef253ba68ca0cdee08add4",
+        "machine": "i386",
+        "pe_type": "PE32",
+        "subsystem": "Windows GUI",
+        "image_base": "0x00400000",
+        "entry_point": "0x00405B7A",
+        "linker_version": "9.00",
+        "code_range": [
+          "0x00401000",
+          "0x0040C800"
+        ],
+        "import_dlls": [
+          "ADVAPI32.dll",
+          "USER32.dll",
+          "SHELL32.dll",
+          "KERNEL32.dll"
+        ],
+        "import_count": 104,
+        "iat_entries": 104
+      }
+    },
+    {
+      "name": "recover",
+      "seconds": 15.49,
+      "status": "ok",
+      "message": "605 functions, 62995 instructions",
+      "data": {
+        "count": 605,
+        "instructions": 62995
+      }
+    },
+    {
+      "name": "translate",
+      "seconds": 2.35,
+      "status": "ok",
+      "message": "2 source files, 6963221 bytes, 0 lift errors",
+      "data": {
+        "source_units": 2,
+        "source_bytes": 6963221,
+        "lift_errors": 0,
+        "seconds": 1.2
+      }
+    },
+    {
+      "name": "project",
+      "seconds": 0.16,
+      "status": "ok",
+      "message": "project at /private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust",
+      "data": {
+        "project": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust",
+        "name": "idman643build18",
+        "source_categories": {
+          "HIGH_LEVEL_VERIFIED": 0,
+          "HIGH_LEVEL_UNVERIFIED": 0,
+          "LOW_LEVEL_FALLBACK": 605,
+          "UNRESOLVED": 0
+        },
+        "high_level_functions": [],
+        "highlevel_modules_skipped": [
+          {
+            "module": "doukutsu-sweep",
+            "reason": "target.sha256 does not match this executable",
+            "module_sha256": "fa18379fe942ecb5fd69360ede81675ad6bb8b743bef2120305c4b439c732218",
+            "executable_sha256": "7346128fab42957b4254eabdb012bfdbd751e9069361e98a6916f26bb03d62ee"
+          },
+          {
+            "module": "ikachan",
+            "reason": "target.sha256 does not match this executable",
+            "module_sha256": "22923218ba97271a5acc5753b17fcb67d5dd98c00369a317abda44204a10df80",
+            "executable_sha256": "7346128fab42957b4254eabdb012bfdbd751e9069361e98a6916f26bb03d62ee"
+          }
+        ],
+        "runtime_files": 42,
+        "highlevel_files": 0
+      }
+    },
+    {
+      "name": "compile",
+      "seconds": 82.81,
+      "status": "ok",
+      "message": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/build/idman643build18 (14588544 bytes, 82.7s)",
+      "data": {
+        "binary": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/build/idman643build18",
+        "sha256": "bc1dc22780acf8cd30a46ae4ac3f0d44e7490a2c3054f5b6dfab33add23459f3",
+        "seconds": 82.7,
+        "source_bytes": 20510383,
+        "build_timeout_seconds": 697.8011274337769,
+        "build_timeout_adaptive": true
+      }
+    },
+    {
+      "name": "run",
+      "seconds": 1.47,
+      "status": "ok",
+      "message": "exited, exit=0, 1.4s, 0 unresolved imports",
+      "data": {
+        "command": [
+          "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/build/idman643build18"
+        ],
+        "cwd": "/Users/haseeb-mir/Downloads/recomp-apps/PRIORITY_TITLE_PROOF/02_IDM/01_inputs",
+        "headless": true,
+        "timeout_seconds": 30.0,
+        "timed_out": false,
+        "status": "exited",
+        "exit_code": 0,
+        "seconds": 1.4,
+        "booted": true,
+        "entry_point": "0x00405B7A",
+        "unresolved_import_count": 0,
+        "bound_imports": 104,
+        "unresolved_imports": [],
+        "import_trace_enabled": false,
+        "import_profile": [],
+        "import_calls_total": 0,
+        "log_stdout": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/logs/run.stdout.log",
+        "log_stderr": "/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/logs/run.stderr.log",
+        "stdout_tail": "",
+        "stderr_tail": "[pe] <embedded image> mapped at 0x00400000, span 0x1B000\n[pe] bound 104 imports, 0 unresolved\n[host] C:\\idman643build18.exe booted: entry 0x00405B7A, 0 unresolved imports\n[MessageBox] IDM Setup: IDM no longer supports older versions of Windows such as Windows XP or Vista.\nIDM requires Windows 7 or later.\n[win32hle] ExitProcess(0) from guest 0x00408CA5",
+        "output_tail": "[pe] <embedded image> mapped at 0x00400000, span 0x1B000\n[pe] bound 104 imports, 0 unresolved\n[host] C:\\idman643build18.exe booted: entry 0x00405B7A, 0 unresolved imports\n[MessageBox] IDM Setup: IDM no longer supports older versions of Windows such as Windows XP or Vista.\nIDM requires Windows 7 or later.\n[win32hle] ExitProcess(0) from guest 0x00408CA5"
+      }
+    }
+  ],
+  "outcome": {
+    "status": "not-run",
+    "reason": "verification did not run"
+  },
+  "score": 85,
+  "manifest": "manifest.json"
+}
