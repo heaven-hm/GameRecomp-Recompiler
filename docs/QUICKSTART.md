@@ -25,7 +25,7 @@ export GAMERECOMP_CLI=/abs/path/to/game-recomp-cli
 | Language | Install | Example |
 |---|---|---|
 | Python | `pip install -e python` | `PYTHONPATH=python python3 python/examples/basic.py --pe game.exe --project /tmp/gr` |
-| Rust | path dependency on `rust/` | `cd rust && blaze run --example basic -- "$GAMERECOMP_CLI" game.exe /tmp/gr` |
+| Rust | path dependency on `rust/` | `cd rust && cargo run --example basic -- "$GAMERECOMP_CLI" game.exe /tmp/gr` |
 | C | compile `src/gamerecomp_sdk.c` + `c/examples/basic.c` | `docs/C.md` |
 | C++ | compile `src/gamerecomp_sdk.c` + `cpp/examples/basic.cpp` | `docs/CPP.md` |
 
@@ -38,10 +38,10 @@ before sharing it (`docs/SECURITY.md`).
 ```sh
 python3 -m pytest python/tests -q          # Python contract tests
 cmake -S . -B build && cmake --build build # C/C++ SDK and examples
-cd rust && blaze test                       # Rust SDK via Blaze, no cargo/rustc
+cd rust && cargo test                       # Rust SDK via Blaze, no cargo/rustc
 ```
 
-Blaze is the local Rust build tool for this SDK (`curl -fsSL https://ix.dev/blaze | sh`).
+Blaze is the local Rust build tool for this SDK (`cargo install kache --locked && kache init`).
 CI cross-platform matrices use their own toolchains; see `docs/CI.md`.
 
 ## 4. Read the report

@@ -83,31 +83,29 @@ jobs:
           python3 -m pytest python/tests -q 2>&1 | tee "$log_dir/python.log"
 
       # --- Rust -------------------------------------------------------------
-      - name: Install Blaze
+      - name: Install Kache
         if: matrix.check == 'rust'
-        run: |
-          set -euo pipefail
-          curl -fsSL https://ix.dev/blaze | sh
-          blaze --version
+        uses: kunobi-ninja/kache-action@v1
 
-      - name: Cache Blaze build state
+      - name: Cache Kache build state
         if: matrix.check == 'rust'
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
           path: |
-            ~/.blaze
+            ~/.cache/kache
+            ~/.local/share/kache
             rust/target
-          key: ${{ runner.os }}-blaze-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
           enableCrossOsArchive: false
 
-      - name: Rust SDK (Blaze)
+      - name: Rust SDK (Kache)
         if: matrix.check == 'rust'
         working-directory: rust
         run: |
           set -o pipefail
           log_dir="$RUNNER_TEMP/sdk-logs"
           mkdir -p "$log_dir"
-          blaze test 2>&1 | tee "$log_dir/rust.log"
+          cargo test --locked 2>&1 | tee "$log_dir/rust.log"
 
       # --- JavaScript / TypeScript -----------------------------------------
       - name: JavaScript SDK

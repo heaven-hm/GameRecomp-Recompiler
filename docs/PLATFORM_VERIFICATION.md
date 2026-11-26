@@ -1,3 +1,7 @@
+> Historical record: the commands below were the Blaze-based Rust checks at
+> the time of measurement. Current Rust builds use Kache; see
+> [BUILD_TOOL_BENCHMARK.md](BUILD_TOOL_BENCHMARK.md).
+
 # Platform verification record (SDK10)
 
 This document records what was actually executed for the four SDK bindings at

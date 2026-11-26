@@ -31,7 +31,7 @@ Four independent jobs per runner (`ubuntu-latest`, `macos-latest`):
 | Check | Command | What it proves |
 |---|---|---|
 | Python | `python3 -m pytest python/tests -q` with `PYTHONPATH=python` | Missing CLI, missing PE, success and CLI-failure paths. |
-| Rust | `blaze test` inside `rust/` | Unit tests and example build, no external crates. |
+| Rust | `cargo test (via Kache)` inside `rust/` | Unit tests and example build, no external crates. |
 | C | `sh tests/test_c_sdk.sh` | `-Wall -Wextra` compile, fake-CLI report path, EINTR handling. |
 | C++ | `sh tests/test_cpp_sdk.sh` | `-Wall -Wextra` compile, score present/absent paths. |
 
