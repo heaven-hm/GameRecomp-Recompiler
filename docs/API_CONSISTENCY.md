@@ -42,6 +42,7 @@ exposes PE inspection, and the returned report shape differs in every language.
 | Concern | C | C++ | Rust | Python | JS/TS |
 |---|---|---|---|---|---|
 | Create / validate client | `gr_client_init_default(&c)` → `0`/`-1` | `gamerecomp::Client()` throws on failure | `Client::from_env()` → `Result<Self, Error>` | `Client()` raises `RecompileError` | `new Client()` throws `RecompileError` |
+| Build with options | `gr_build(..., &gr_build_options, ...)` | `client.build(pe, project, BuildOptions)` | `Client::build(pe, project, BuildOptions)` | `Client().build(pe, project, BuildOptions)` | `client.build(pe, project, opts)` |
 | Run pipeline | `gr_recompile(&c, pe, proj, buf, size)` → `0`/`-1` | `client.recompile(pe, proj)` → `Report` (throws) | `client.recompile(pe, proj)` → `Result<Report, Error>` | `client.recompile_to_path(pe, proj)` → `Path` | `client.recompileToPath(pe, proj)` → `string` |
 | Parsed report body | none; path only | `Report::score()` → `int` | `Report::score: Option<i64>` + `report_json()` → `String` | `client.recompile(pe, proj)` → `dict` | `client.recompile(pe, proj)` → object (typed in `index.d.ts`) |
 | Inspect a PE without a project | — | — | — | `client.inspect(pe)` → `dict` | `client.inspect(pe)` → object |

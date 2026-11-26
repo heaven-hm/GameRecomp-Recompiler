@@ -166,6 +166,27 @@ pub struct Client {
     timeout: Option<Duration>,
 }
 
+/// High-level build options: guest/host formats and pipeline shape.
+/// `None` means "let the engine choose its default".
+#[derive(Debug, Clone, Default)]
+pub struct BuildOptions {
+    pub input_os: Option<String>,
+    pub input_arch: Option<String>,
+    pub target_os: Option<String>,
+    pub target_arch: Option<String>,
+    pub out_mode: Option<String>,
+    pub skip_stages: Option<String>,
+}
+
+impl BuildOptions {
+    #[must_use] pub fn input_os(mut self, v: impl Into<String>) -> Self { self.input_os = Some(v.into()); self }
+    #[must_use] pub fn input_arch(mut self, v: impl Into<String>) -> Self { self.input_arch = Some(v.into()); self }
+    #[must_use] pub fn target_os(mut self, v: impl Into<String>) -> Self { self.target_os = Some(v.into()); self }
+    #[must_use] pub fn target_arch(mut self, v: impl Into<String>) -> Self { self.target_arch = Some(v.into()); self }
+    #[must_use] pub fn out_mode(mut self, v: impl Into<String>) -> Self { self.out_mode = Some(v.into()); self }
+    #[must_use] pub fn skip_stages(mut self, v: impl Into<String>) -> Self { self.skip_stages = Some(v.into()); self }
+}
+
 impl Client {
     /// Construct a client without an engine path. The SDK discovers the
     /// engine from `GAMERECOMP_CLI` or PATH; callers never hard-code a path.
@@ -247,33 +268,39 @@ impl Client {
         }
     }
 
-    /// Recompile `pe` into `project` and return the parsed report.
-    ///
-    /// The CLI is invoked as `run <pe> --project-dir <project> --no-table
-    /// --no-progress`. On success the report at
-    /// `<project>/reports/report.json` is verified and its `score` parsed.
+    /// Recompile with engine defaults (convenience wrapper over [`Client::build`]).
     pub fn recompile(
         &self,
         pe: impl AsRef<Path>,
         project: impl AsRef<Path>,
     ) -> Result<Report, Error> {
+        self.build(pe, project, BuildOptions::default())
+    }
+
+    /// Build `pe` into `project` with explicit guest/host options.
+    /// The path to the engine is managed by the SDK, not by the caller.
+    pub fn build(
+        &self,
+        pe: impl AsRef<Path>,
+        project: impl AsRef<Path>,
+        opts: BuildOptions,
+    ) -> Result<Report, Error> {
         let pe = pe.as_ref();
         let project = project.as_ref();
         if !pe.is_file() {
-            return Err(Error::MissingInput {
-                path: pe.to_path_buf(),
-            });
+            return Err(Error::MissingInput { path: pe.to_path_buf() });
         }
-
         let mut cmd = Command::new(&self.cli);
-        cmd.arg("run")
-            .arg(pe)
-            .arg("--project-dir")
-            .arg(project)
-            .arg("--no-table")
-            .arg("--no-progress");
-        let output = self.run_command(&mut cmd, "recompile")?;
-
+        cmd.arg("run").arg(pe).arg("--project-dir").arg(project)
+           .arg("--no-table").arg("--no-progress");
+        for (flag, value) in [
+            ("--input-os", opts.input_os), ("--input-arch", opts.input_arch),
+            ("--target-os", opts.target_os), ("--target-arch", opts.target_arch),
+            ("--out-mode", opts.out_mode), ("--skip-stages", opts.skip_stages),
+        ] {
+            if let Some(v) = value { cmd.arg(flag).arg(v); }
+        }
+        let output = self.run_command(&mut cmd, "build")?;
         if !output.status.success() {
             return Err(Error::Failed {
                 message: "CLI exited unsuccessfully".to_string(),
@@ -282,14 +309,9 @@ impl Client {
                 source: None,
             });
         }
-
         let path = project.join("reports").join("report.json");
-        let raw = std::fs::read_to_string(&path).map_err(|source| Error::NoReport {
-            path: path.clone(),
-            source,
-        })?;
-        let score = parse_score(&raw);
-        Ok(Report { path, score })
+        let raw = std::fs::read_to_string(&path).map_err(|source| Error::NoReport { path: path.clone(), source })?;
+        Ok(Report { path, score: parse_score(&raw) })
     }
 
     /// Spawn `cmd`, capture its output, and enforce the configured timeout.
@@ -761,6 +783,35 @@ mod tests {
                 .version()
                 .unwrap_err();
             assert!(matches!(err, Error::Version { .. }), "got {err:?}");
+        }
+
+        #[test]
+        fn build_passes_guest_and_host_options() {
+            let tmp = TempDir::new();
+            let log = tmp.path.join("argv.txt");
+            let body = format!(
+                "printf '%s\\n' \"$@\" > \"{}\"\n\
+                 while [ \"$#\" -gt 0 ]; do\n\
+                   case \"$1\" in --project-dir) proj=\"$2\"; shift 2 ;; *) shift ;; esac\n\
+                 done\n\
+                 mkdir -p \"$proj/reports\"\n\
+                 printf '{{\"score\":70}}' > \"$proj/reports/report.json\"\n\
+                 exit 0\n", log.display());
+            let cli = fake_cli(&tmp.path, &body);
+            let opts = BuildOptions::default()
+                .input_os("windows").input_arch("x86")
+                .target_os("macos").target_arch("arm64")
+                .out_mode("full").skip_stages("verify");
+            let report = Client::new(&cli).expect("client")
+                .build(pe(&tmp.path), &tmp.path, opts).expect("build");
+            assert_eq!(report.score, Some(70));
+            let args = std::fs::read_to_string(&log).expect("argv log");
+            for pair in [("--input-os", "windows"), ("--input-arch", "x86"),
+                         ("--target-os", "macos"), ("--target-arch", "arm64"),
+                         ("--out-mode", "full"), ("--skip-stages", "verify")] {
+                assert!(args.contains(pair.0), "missing {}", pair.0);
+                assert!(args.contains(pair.1), "missing {}", pair.1);
+            }
         }
 
         #[test]
