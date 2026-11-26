@@ -1,0 +1,71 @@
+{
+  "app": "Internet Download Manager (IDM)",
+  "apps": [
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "c",
+      "source": "/* Working C app: recompile through the SDK and print a verified report card. */\n#include \"gamerecomp_sdk.h\"\n#include <stdio.h>\n#include <string.h>\nint main(int argc, char **argv) {\n    if (argc != 4) { fprintf(stderr, \"usage: app <cli> <pe> <project>\\n\"); return 2; }\n    gr_client c; char report[1024] = {0};\n    gr_result r = gr_client_init_ex(&c, argv[1]);\n    if (gr_result_code(r) != GR_OK) { fprintf(stderr, \"init: %s\\n\", gr_result_detail(r)); return 1; }\n    r = gr_recompile_ex(&c, argv[2], argv[3], report, sizeof report);\n    if (gr_result_code(r) != GR_OK) { fprintf(stderr, \"recompile: %s\\n\", gr_result_detail(r)); gr_client_free(&c); return 1; }\n    FILE *f = fopen(report, \"rb\");\n    if (!f) { fprintf(stderr, \"report missing\\n\"); gr_client_free(&c); return 1; }\n    fseek(f, 0, SEEK_END); long bytes = ftell(f); fclose(f);\n    printf(\"APP_OK sdk=c report=%s bytes=%ld\\n\", report, bytes);\n    gr_client_free(&c);\n    return 0;\n}\n",
+      "source_path": "demos/apps/c/app.c",
+      "source_sha256": "33eb81db8d1668ea343ebd33aaac144759a842941bfb432f37248ba1d76b5a5f",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=c report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/c/reports/report.json bytes=5812\n",
+      "stdout_sha256": "4b5b1b3a2d5afb2f34e3fea5548d8ab658475bb9ff93d38978518a8adb68c959"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "cpp",
+      "source": "// Working C++ app: RAII client plus parsed score from the SDK report.\n#include \"gamerecomp_sdk.hpp\"\n#include <iostream>\nint main(int argc, char **argv) {\n    if (argc != 4) { std::cerr << \"usage: app <cli> <pe> <project>\\n\"; return 2; }\n    try {\n        gamerecomp::Client client(argv[1]);\n        auto report = client.recompile(argv[2], argv[3]);\n        std::cout << \"APP_OK sdk=cpp report=\" << report.path\n                  << \" score=\" << report.score() << \"\\n\";\n    } catch (const std::exception &e) { std::cerr << \"error: \" << e.what() << \"\\n\"; return 1; }\n    return 0;\n}\n",
+      "source_path": "demos/apps/cpp/app.cpp",
+      "source_sha256": "d7228067d1743d2a31c3dfbb4b4f08b6b8ed4c25aa7f9d3da6c1a7b49ea50d8a",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=cpp report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/cpp/reports/report.json score=85\n",
+      "stdout_sha256": "8119cf191ffaf54650bc18960cd4c4b672c68f43e720d2913952ce4ab48b78da"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "python",
+      "source": "\"\"\"Working Python app: recompile and print a structured report card.\"\"\"\nimport sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path(__file__).resolve().parents[3] / \"python\"))\nfrom gamerecomp_sdk import Client\n\ndef main(cli, pe, project):\n    client = Client(cli)\n    report = client.recompile(pe, project)\n    stages = report.get(\"stages\") or []\n    print(f\"APP_OK sdk=python score={report.get('score')} stages={len(stages)} \"\n          f\"report={client.recompile_to_path(pe, project)}\")\n    return 0\n\nif __name__ == \"__main__\":\n    if len(sys.argv) != 4:\n        print(\"usage: app.py <cli> <pe> <project>\", file=sys.stderr)\n        sys.exit(2)\n    sys.exit(main(*sys.argv[1:]))\n",
+      "source_path": "demos/apps/python/app.py",
+      "source_sha256": "d68946edec8548042976e5e2a1b46844a0f1f2aed2e1fed279fb3428212f4cb1",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=python score=85 stages=6 report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python/reports/report.json\n",
+      "stdout_sha256": "c4ce3bac2b5d29428975295e10aee21b7b47eafa079760677804bd2bbb47a229"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "javascript",
+      "source": "// Working JavaScript app: recompile and print a structured report card.\nconst { Client } = require('../../../js');\nconst [cli, pe, project] = process.argv.slice(2);\nif (!cli || !pe || !project) {\n  console.error('usage: node app.js <cli> <pe> <project>');\n  process.exit(2);\n}\ntry {\n  const client = new Client(cli);\n  const report = client.recompile(pe, project);\n  const stages = Array.isArray(report.stages) ? report.stages.length : 0;\n  console.log(`APP_OK sdk=javascript score=${report.score ?? 'null'} stages=${stages} report=${client.recompileToPath(pe, project)}`);\n} catch (e) { console.error(`error: ${e.message}`); process.exit(1); }\n",
+      "source_path": "demos/apps/js/app.js",
+      "source_sha256": "6149dac6789158382f304c84f5c5f84b4112eaded6d8d034f77fa4bb79d6fdd3",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=javascript score=85 stages=6 report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/js/reports/report.json\n",
+      "stdout_sha256": "451a9cc553e8bd3b08482e645241fd0e600994cd2ce3b7d6b5f1c980305c976d"
+    },
+    {
+      "app_ok": true,
+      "exit_code": 0,
+      "sdk": "rust",
+      "source": "//! Working Rust app: typed report plus raw JSON from the SDK.\nuse gamerecomp_sdk::Client;\nfn main() {\n    let args: Vec<String> = std::env::args().skip(1).collect();\n    if args.len() != 3 { eprintln!(\"usage: app <cli> <pe> <project>\"); std::process::exit(2); }\n    let client = match Client::new(&args[0]) { Ok(c) => c, Err(e) => { eprintln!(\"init: {e}\"); std::process::exit(1); } };\n    let report = match client.recompile(&args[1], &args[2]) { Ok(r) => r, Err(e) => { eprintln!(\"recompile: {e}\"); std::process::exit(1); } };\n    let raw = report.report_json();\n    println!(\"APP_OK sdk=rust score={:?} report={} json_bytes={}\", report.score, report.path.display(), raw.len());\n}\n",
+      "source_path": "demos/apps/rust/app.rs",
+      "source_sha256": "10022d439b20202cf1b6f90b154400ead209057fee7e5c242ee027bfdf4b6b4f",
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "APP_OK sdk=rust score=Some(85) report=/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/rust/reports/report.json json_bytes=5838\n",
+      "stdout_sha256": "4419c4f1a315c104a3ea64cf857aa6f8deba6c2eabf481ff9a5d797debcf1fa3"
+    }
+  ],
+  "cli": "GameReComp-cli v0.3.0 real release binary; wrapper only appends --skip-stages verify",
+  "host": "macOS arm64 (Windows PE32 x86 -> native macOS arm64 port)",
+  "input_pe": "idman643build18.exe",
+  "input_sha256": "7346128fab42957b4254eabdb012bfdbd751e9069361e98a6916f26bb03d62ee",
+  "schema": 1,
+  "scope": "Real PE32 recompilation and real report.json through each SDK; no Windows oracle, no gameplay equivalence claim"
+}

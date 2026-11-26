@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>autorecomp report - idman643build18.exe</title>
+<style>
+body { font: 14px system-ui, sans-serif; margin: 2rem; color: #1b1b1b; }
+h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; margin-top: 1.6rem; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+td, th { border: 1px solid #ccc; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+pre { margin: 0; white-space: pre-wrap; font-size: 12px; }
+.ok { color: #146c2e; } .failed { color: #a11; } .skipped { color: #666; }
+</style></head><body>
+<h1>autorecomp report: idman643build18.exe</h1>
+<p>Generated 2026-11-26T04:04:00Z. Project: <code>/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python</code>.
+Score: <strong>85/100</strong>.
+Verification: <strong>not-run</strong> - </p>
+<h2>Stages</h2>
+<table><tr><th>Stage</th><th>Status</th><th>Time</th><th>Detail</th></tr><tr><td>inspect</td><td class='ok'>ok</td><td>1.6s</td><td><pre>i386 PE32, 104 imports, entry 0x00405B7A</pre></td></tr><tr><td>recover</td><td class='ok'>ok</td><td>8.8s</td><td><pre>605 functions, 62995 instructions</pre></td></tr><tr><td>translate</td><td class='ok'>ok</td><td>0.7s</td><td><pre>2 source files, 6963221 bytes, 0 lift errors</pre></td></tr><tr><td>project</td><td class='ok'>ok</td><td>0.1s</td><td><pre>project at /private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python</pre></td></tr><tr><td>compile</td><td class='ok'>ok</td><td>46.7s</td><td><pre>/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/sdk-idm/idm-bin/python/build/idman643build18 (14588544 bytes, 46.6s)</pre></td></tr><tr><td>run</td><td class='ok'>ok</td><td>0.6s</td><td><pre>exited, exit=0, 0.6s, 0 unresolved imports</pre></td></tr></table>
+<h2>Source provenance</h2>
+<table><tr><th>Category</th><th>Functions</th></tr><tr><td>HIGH_LEVEL_VERIFIED</td><td>0</td></tr><tr><td>HIGH_LEVEL_UNVERIFIED</td><td>0</td></tr><tr><td>LOW_LEVEL_FALLBACK</td><td>605</td></tr><tr><td>UNRESOLVED</td><td>0</td></tr></table>
+<p>Source digest: <code>e74b68d22e998c7a29fbcd7bc6e5387dfce6135d1140a1c657abaa3f98d2a4af</code></p>
+<h2>Oracle checks</h2>
+<table><tr><th>Check</th><th>Expected</th><th>Actual</th><th>Result</th></tr><tr><td colspan="4">none supplied</td></tr></table>
+<h2>Oracle gaps</h2><ul></ul>
+<h2>Run output (tail)</h2><pre>[pe] &lt;embedded image&gt; mapped at 0x00400000, span 0x1B000
+[pe] bound 104 imports, 0 unresolved
+[host] C:\idman643build18.exe booted: entry 0x00405B7A, 0 unresolved imports
+[MessageBox] IDM Setup: IDM no longer supports older versions of Windows such as Windows XP or Vista.
+IDM requires Windows 7 or later.
+[win32hle] ExitProcess(0) from guest 0x00408CA5</pre>
+</body></html>
