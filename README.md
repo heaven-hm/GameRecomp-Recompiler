@@ -41,26 +41,27 @@ targets that have not passed their own gates stay BLOCKED or DEFERRED.
 ```python
 # Python
 from gamerecomp_sdk import Client
-report = Client("/abs/path/to/game-recomp-cli").recompile("game.exe", "out")
+report = Client().recompile("game.exe", "out")
 print(report["score"])
 ```
 
 ```rust
-// Rust (cd rust && blaze run --example basic -- <cli> <pe> <project>)
+// Rust (engine discovered internally; no CLI path in the API)
 use gamerecomp_sdk::Client;
-let report = Client::new("/abs/path/to/game-recomp-cli")?.recompile("game.exe", "out")?;
+let report = Client::from_env()?.recompile("game.exe", "out")?;
 println!("{:?}", report.score);
 ```
 
 ```c
 /* C: see docs/C.md and c/examples/basic.c */
-gr_client *c = gr_client_init("/abs/path/to/game-recomp-cli");
-char *report = gr_recompile(c, "game.exe", "out");
+gr_client c; char path[1024];
+gr_client_init_default(&c);
+gr_recompile(&c, "game.exe", "out", path, sizeof path);
 ```
 
 ```cpp
 // C++: see docs/CPP.md and cpp/examples/basic.cpp
-gamerecomp::Client c("/abs/path/to/game-recomp-cli");
+gamerecomp::Client c;
 auto report = c.recompile("game.exe", "out");
 ```
 
