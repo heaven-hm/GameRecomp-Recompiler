@@ -18,3 +18,12 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+
+# Generated recompiler projects and build artifacts must never enter the SDK.
+idm-bin/
+verify-target/
+projects/
+*-bin/
+target/
+build/
+reports/

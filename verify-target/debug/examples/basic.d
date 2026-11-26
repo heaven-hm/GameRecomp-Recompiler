@@ -1,1 +1,0 @@
-/private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/kache-switch/verify-target/debug/examples/basic: /private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/kache-switch/rust/examples/basic.rs /private/var/folders/q0/rj0k1xgn28x14thfz4gnbm5c0000gn/T/opencode/kache-switch/rust/src/lib.rs
